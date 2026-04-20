@@ -1,0 +1,34 @@
+{
+  "produk": [
+    {
+      "id": 1,
+      "nama": "E-book Panduan Bisnis",
+      "harga": 85000,
+      "stok": 50,
+      "modal": 10000
+    },
+    {
+      "id": 2,
+      "nama": "Template Excel Keuangan",
+      "harga": 45000,
+      "stok": 30,
+      "modal": 5000
+    },
+    {
+      "id": 3,
+      "nama": "Software Kasir Lite",
+      "harga": 150000,
+      "stok": 99,
+      "modal": 20000
+    },
+    {
+      "id": 4,
+      "nama": "surya 12",
+      "harga": 20000,
+      "stok": 12,
+      "modal": 19000
+    }
+  ],
+  "transaksi": [],
+  "invoice": []
+}
