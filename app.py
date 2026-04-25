@@ -11,7 +11,8 @@ from reportlab.lib.units import cm
 import json, io
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://martin:umkm1234@localhost/umkmpro'
+import os
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'postgresql://martin:umkm1234@localhost/umkmpro')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = 'umkmpro-secret-2024'
 db = SQLAlchemy(app)
