@@ -1,4 +1,6 @@
 import os
+from dotenv import load_dotenv
+load_dotenv()
 import midtransclient
 from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
@@ -28,9 +30,8 @@ def add_security_headers(response):
         "img-src * data:;"
     )
     return response
-MIDTRANS_SERVER_KEY = os.environ.get('MIDTRANS_SERVER_KEY', 'Mid-server-KAp7rfn61gZWZiw9Nn-WR3MG')
-MIDTRANS_CLIENT_KEY = os.environ.get('MIDTRANS_CLIENT_KEY', 'SB-Mid-client-InIIlxVR1dkne40X')
-
+MIDTRANS_SERVER_KEY = os.environ.get('MIDTRANS_SERVER_KEY', '')
+MIDTRANS_CLIENT_KEY = os.environ.get('MIDTRANS_CLIENT_KEY', '')
 snap = midtransclient.Snap(
     is_production=False,
     server_key=MIDTRANS_SERVER_KEY
