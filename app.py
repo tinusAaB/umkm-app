@@ -1,3 +1,4 @@
+import os
 from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
@@ -350,20 +351,23 @@ def dashboard():
     })
 
 with app.app_context():
-    db.create_all()
-    if User.query.count() == 0:
-        db.session.add_all([
-            User(username='owner', password=bcrypt.generate_password_hash('owner123').decode('utf-8'), role='owner', nama='Martin Owner'),
-            User(username='kasir', password=bcrypt.generate_password_hash('kasir123').decode('utf-8'), role='kasir', nama='Kasir 1'),
-        ])
-        db.session.commit()
-    if Produk.query.count() == 0:
-        db.session.add_all([
-            Produk(nama='E-book Panduan Bisnis', harga=85000, modal=10000, stok=50),
-            Produk(nama='Template Excel Keuangan', harga=45000, modal=5000, stok=30),
-            Produk(nama='Software Kasir Lite', harga=150000, modal=20000, stok=99),
-        ])
-        db.session.commit()
+    try:
+        db.create_all()
+        if User.query.count() == 0:
+            db.session.add_all([
+                User(username='owner', password=bcrypt.generate_password_hash('owner123').decode('utf-8'), role='owner', nama='Martin Owner'),
+                User(username='kasir', password=bcrypt.generate_password_hash('kasir123').decode('utf-8'), role='kasir', nama='Kasir 1'),
+            ])
+            db.session.commit()
+        if Produk.query.count() == 0:
+            db.session.add_all([
+                Produk(nama='E-book Panduan Bisnis', harga=85000, modal=10000, stok=50),
+                Produk(nama='Template Excel Keuangan', harga=45000, modal=5000, stok=30),
+                Produk(nama='Software Kasir Lite', harga=150000, modal=20000, stok=99),
+            ])
+            db.session.commit()
+    except Exception as e:
+        print(f"Database init error: {e}")
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
