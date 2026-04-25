@@ -345,7 +345,9 @@ def bayar():
             'total': total
         })
     except Exception as e:
+        print(f"Midtrans error: {str(e)}")
         return jsonify({'ok': False, 'error': str(e)}), 500
+    
 
 @app.route('/api/neraca')
 @login_required
