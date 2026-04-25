@@ -6,6 +6,7 @@
 <title>UMKM Pro — Aplikasi Bisnis Digital</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://app.sandbox.midtrans.com/snap/snap.js" data-client-key="SB-Mid-client-InIIlxVR1dkne40X"></script>
 <style>
 :root {
   --bg: #f5f6fa;
@@ -191,7 +192,8 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px;
       <div class="card-title">Keranjang</div>
       <div id="k-list"><div class="empty"><div class="empty-icon">🛒</div>Keranjang kosong</div></div>
       <div class="total-bar"><span class="total-label">Total pembayaran</span><span class="total-val" id="k-total">Rp 0</span></div>
-      <button class="btn btn-primary" style="margin-top:12px;" onclick="prosesTransaksi()">Proses Pembayaran</button>
+      <button class="btn btn-primary" style="margin-top:12px;" onclick="prosesTransaksi()">💵 Bayar Tunai</button>
+<button class="btn btn-ghost" style="margin-top:8px;" onclick="bayarOnline()">💳 Bayar Online (QRIS/Transfer)</button>
     </div>
   </div>
 
@@ -454,6 +456,21 @@ function renderKeranjang() {
 }
 
 function hapusKeranjang(i) { keranjang.splice(i, 1); renderKeranjang(); }
+
+async function bayarOnline() {
+  if (!keranjang.length) { toast('Keranjang masih kosong!'); return; }
+  var pelanggan = document.getElementById('k-pelanggan').value || 'Pelanggan';
+  var res = await api('/api/bayar', 'POST', {
+    items: keranjang.map(function(i){ return {id:i.id, qty:i.qty}; }),
+    pelanggan: pelanggan
+  });
+  if (!res.ok) { toast('Gagal membuat pembayaran: ' + res.error); return; }
+  // Buka halaman pembayaran Midtrans di tab baru
+  window.open(res.redirect_url, '_blank');
+  keranjang = [];
+  renderKeranjang();
+  toast('Halaman pembayaran dibuka di tab baru!');
+}
 
 async function prosesTransaksi() {
   if (!keranjang.length) { toast('Keranjang masih kosong!'); return; }

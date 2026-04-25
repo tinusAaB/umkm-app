@@ -1,4 +1,5 @@
 import os
+import midtransclient
 from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
@@ -16,6 +17,24 @@ import os
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'postgresql://martin:umkm1234@localhost/umkmpro')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = 'umkmpro-secret-2024'
+@app.after_request
+def add_security_headers(response):
+    response.headers['Content-Security-Policy'] = (
+        "default-src *; "
+        "script-src * 'unsafe-inline' 'unsafe-eval'; "
+        "style-src * 'unsafe-inline'; "
+        "frame-src *; "
+        "connect-src *; "
+        "img-src * data:;"
+    )
+    return response
+MIDTRANS_SERVER_KEY = os.environ.get('MIDTRANS_SERVER_KEY', 'Mid-server-KAp7rfn61gZWZiw9Nn-WR3MG')
+MIDTRANS_CLIENT_KEY = os.environ.get('MIDTRANS_CLIENT_KEY', 'SB-Mid-client-InIIlxVR1dkne40X')
+
+snap = midtransclient.Snap(
+    is_production=False,
+    server_key=MIDTRANS_SERVER_KEY
+)
 db = SQLAlchemy(app)
 bcrypt = Bcrypt(app)
 login_manager = LoginManager(app)
@@ -283,6 +302,50 @@ def ganti_password(uid):
     db.session.commit()
     return jsonify({'ok': True})
     
+@app.route('/api/bayar', methods=['POST'])
+@login_required
+def bayar():
+    b = request.json
+    items = b['items']
+    total = 0
+    item_details = []
+    for item in items:
+        p = Produk.query.get(item['id'])
+        if p:
+            subtotal = p.harga * item['qty']
+            total += subtotal
+            item_details.append({
+                'id': str(p.id),
+                'price': p.harga,
+                'quantity': item['qty'],
+                'name': p.nama[:50]
+            })
+    
+    order_id = f"UMKM-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    
+    param = {
+        'transaction_details': {
+            'order_id': order_id,
+            'gross_amount': total
+        },
+        'item_details': item_details,
+        'customer_details': {
+            'first_name': b.get('pelanggan', 'Pelanggan')
+        }
+    }
+    
+    try:
+        transaction = snap.create_transaction(param)
+        return jsonify({
+            'ok': True,
+            'token': transaction['token'],
+            'redirect_url': transaction['redirect_url'],
+            'order_id': order_id,
+            'total': total
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
 @app.route('/api/neraca')
 @login_required
 def neraca():
