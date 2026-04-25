@@ -31,6 +31,7 @@ def add_security_headers(response):
     )
     return response
 MIDTRANS_SERVER_KEY = os.environ.get('MIDTRANS_SERVER_KEY', '')
+print(f"Server Key loaded: {MIDTRANS_SERVER_KEY[:10]}...")
 MIDTRANS_CLIENT_KEY = os.environ.get('MIDTRANS_CLIENT_KEY', '')
 snap = midtransclient.Snap(
     is_production=False,
@@ -348,7 +349,6 @@ def bayar():
         print(f"Midtrans error: {str(e)}")
         return jsonify({'ok': False, 'error': str(e)}), 500
     
-
 @app.route('/api/neraca')
 @login_required
 def neraca():
