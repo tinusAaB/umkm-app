@@ -283,6 +283,49 @@ def ganti_password(uid):
     db.session.commit()
     return jsonify({'ok': True})
     
+@app.route('/api/neraca')
+@login_required
+def neraca():
+    # Pendapatan total
+    total_pendapatan = db.session.query(db.func.sum(Transaksi.total)).scalar() or 0
+    
+    # Hitung HPP (modal x qty terjual)
+    total_hpp = 0
+    transaksi = Transaksi.query.all()
+    for t in transaksi:
+        items = json.loads(t.items or '[]')
+        for item in items:
+            p = Produk.query.get(item['id'])
+            if p:
+                total_hpp += p.modal * item['qty']
+    
+    # Laba kotor
+    laba_kotor = total_pendapatan - total_hpp
+    
+    # Aset
+    nilai_stok = db.session.query(db.func.sum(Produk.modal * Produk.stok)).scalar() or 0
+    
+    # Invoice belum dibayar (piutang)
+    piutang = db.session.query(db.func.sum(Invoice.total)).filter_by(status='Belum Bayar').scalar() or 0
+    
+    # Total aset
+    total_aset = nilai_stok + piutang + total_pendapatan
+    
+    # Invoice lunas
+    invoice_lunas = db.session.query(db.func.sum(Invoice.total)).filter_by(status='Lunas').scalar() or 0
+    
+    return jsonify({
+        'pendapatan': total_pendapatan,
+        'hpp': total_hpp,
+        'laba_kotor': laba_kotor,
+        'margin': round(laba_kotor / total_pendapatan * 100, 1) if total_pendapatan > 0 else 0,
+        'nilai_stok': nilai_stok,
+        'piutang': piutang,
+        'total_aset': total_aset,
+        'invoice_lunas': invoice_lunas,
+        'total_transaksi': len(transaksi),
+    })
+    
 @app.route('/api/stok-alert')
 @login_required
 def stok_alert():
