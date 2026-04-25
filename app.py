@@ -1,128 +1,368 @@
-from flask import Flask, render_template, request, jsonify
-import json, os, datetime
+from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from flask_bcrypt import Bcrypt
+from datetime import datetime
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import cm
+import json, io
 
 app = Flask(__name__)
-DATA_FILE = "data.json"
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://martin:umkm1234@localhost/umkmpro'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SECRET_KEY'] = 'umkmpro-secret-2024'
+db = SQLAlchemy(app)
+bcrypt = Bcrypt(app)
+login_manager = LoginManager(app)
+login_manager.login_view = 'login'
 
-def load_data():
-    if not os.path.exists(DATA_FILE):
-        return {
-            "produk": [
-                {"id": 1, "nama": "E-book Panduan Bisnis", "harga": 85000, "stok": 50, "modal": 10000},
-                {"id": 2, "nama": "Template Excel Keuangan", "harga": 45000, "stok": 30, "modal": 5000},
-                {"id": 3, "nama": "Software Kasir Lite", "harga": 150000, "stok": 99, "modal": 20000}
-            ],
-            "transaksi": [],
-            "invoice": []
-        }
-    with open(DATA_FILE) as f:
-        return json.load(f)
+class User(UserMixin, db.Model):
+    __tablename__ = 'users'
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password = db.Column(db.String(200), nullable=False)
+    role = db.Column(db.String(20), default='kasir')
+    nama = db.Column(db.String(100))
+    dibuat = db.Column(db.DateTime, default=datetime.now)
 
-def save_data(data):
-    with open(DATA_FILE, "w") as f:
-        json.dump(data, f, indent=2)
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
 
-@app.route("/")
+class Produk(db.Model):
+    __tablename__ = 'produk'
+    id = db.Column(db.Integer, primary_key=True)
+    nama = db.Column(db.String(200), nullable=False)
+    harga = db.Column(db.Integer, nullable=False)
+    modal = db.Column(db.Integer, default=0)
+    stok = db.Column(db.Integer, default=0)
+    dibuat = db.Column(db.DateTime, default=datetime.now)
+
+class Transaksi(db.Model):
+    __tablename__ = 'transaksi'
+    id = db.Column(db.Integer, primary_key=True)
+    pelanggan = db.Column(db.String(200), default='Umum')
+    total = db.Column(db.Integer, nullable=False)
+    items = db.Column(db.Text)
+    tanggal = db.Column(db.DateTime, default=datetime.now)
+
+class Invoice(db.Model):
+    __tablename__ = 'invoice'
+    id = db.Column(db.Integer, primary_key=True)
+    nomor = db.Column(db.String(50))
+    pelanggan = db.Column(db.String(200), nullable=False)
+    produk = db.Column(db.String(200))
+    jumlah = db.Column(db.Integer, default=1)
+    harga = db.Column(db.Integer, default=0)
+    total = db.Column(db.Integer, default=0)
+    jatuh_tempo = db.Column(db.String(50))
+    status = db.Column(db.String(50), default='Belum Bayar')
+    tanggal = db.Column(db.DateTime, default=datetime.now)
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        data = request.json
+        user = User.query.filter_by(username=data['username']).first()
+        if user and bcrypt.check_password_hash(user.password, data['password']):
+            login_user(user)
+            return jsonify({'ok': True, 'role': user.role, 'nama': user.nama})
+        return jsonify({'ok': False, 'pesan': 'Username atau password salah'}), 401
+    return render_template('login.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
+
+@app.route('/api/me')
+@login_required
+def me():
+    return jsonify({'id': current_user.id, 'username': current_user.username, 'role': current_user.role, 'nama': current_user.nama})
+
+@app.route('/')
+@login_required
 def index():
-    return render_template("index.html")
+    return render_template('index.html')
 
-@app.route("/api/produk", methods=["GET"])
+@app.route('/api/produk', methods=['GET'])
+@login_required
 def get_produk():
-    data = load_data()
-    return jsonify(data["produk"])
+    produk = Produk.query.all()
+    return jsonify([{'id': p.id, 'nama': p.nama, 'harga': p.harga, 'modal': p.modal, 'stok': p.stok} for p in produk])
 
-@app.route("/api/produk", methods=["POST"])
+@app.route('/api/produk', methods=['POST'])
+@login_required
 def add_produk():
-    data = load_data()
-    body = request.json
-    new_id = max([p["id"] for p in data["produk"]], default=0) + 1
-    produk = {"id": new_id, "nama": body["nama"], "harga": int(body["harga"]), "stok": int(body["stok"]), "modal": int(body["modal"])}
-    data["produk"].append(produk)
-    save_data(data)
-    return jsonify(produk)
+    b = request.json
+    p = Produk(nama=b['nama'], harga=int(b['harga']), modal=int(b.get('modal', 0)), stok=int(b.get('stok', 99)))
+    db.session.add(p)
+    db.session.commit()
+    return jsonify({'id': p.id, 'nama': p.nama, 'harga': p.harga, 'modal': p.modal, 'stok': p.stok})
 
-@app.route("/api/produk/<int:pid>", methods=["DELETE"])
+@app.route('/api/produk/<int:pid>', methods=['DELETE'])
+@login_required
 def del_produk(pid):
-    data = load_data()
-    data["produk"] = [p for p in data["produk"] if p["id"] != pid]
-    save_data(data)
-    return jsonify({"ok": True})
+    p = Produk.query.get_or_404(pid)
+    db.session.delete(p)
+    db.session.commit()
+    return jsonify({'ok': True})
 
-@app.route("/api/transaksi", methods=["GET"])
+@app.route('/api/transaksi', methods=['GET'])
+@login_required
 def get_transaksi():
-    data = load_data()
-    return jsonify(data["transaksi"])
+    transaksi = Transaksi.query.order_by(Transaksi.tanggal.desc()).all()
+    return jsonify([{'id': t.id, 'pelanggan': t.pelanggan, 'total': t.total, 'items': json.loads(t.items or '[]'), 'tanggal': t.tanggal.strftime('%d/%m/%Y %H:%M')} for t in transaksi])
 
-@app.route("/api/transaksi", methods=["POST"])
+@app.route('/api/transaksi', methods=['POST'])
+@login_required
 def add_transaksi():
-    data = load_data()
-    body = request.json
-    items = body["items"]
+    b = request.json
+    items = b['items']
     total = 0
     for item in items:
-        produk = next((p for p in data["produk"] if p["id"] == item["id"]), None)
-        if produk:
-            produk["stok"] = max(0, produk["stok"] - item["qty"])
-            total += produk["harga"] * item["qty"]
-    trx = {
-        "id": len(data["transaksi"]) + 1,
-        "tanggal": datetime.datetime.now().strftime("%d/%m/%Y %H:%M"),
-        "items": items,
-        "total": total,
-        "pelanggan": body.get("pelanggan", "Umum")
-    }
-    data["transaksi"].append(trx)
-    save_data(data)
-    return jsonify(trx)
+        p = Produk.query.get(item['id'])
+        if p:
+            p.stok = max(0, p.stok - item['qty'])
+            total += p.harga * item['qty']
+    t = Transaksi(pelanggan=b.get('pelanggan', 'Umum'), total=total, items=json.dumps(items))
+    db.session.add(t)
+    db.session.commit()
+    return jsonify({'id': t.id, 'total': total})
 
-@app.route("/api/invoice", methods=["GET"])
+@app.route('/api/invoice', methods=['GET'])
+@login_required
 def get_invoice():
-    data = load_data()
-    return jsonify(data["invoice"])
+    invoices = Invoice.query.order_by(Invoice.tanggal.desc()).all()
+    return jsonify([{'id': i.id, 'nomor': i.nomor, 'pelanggan': i.pelanggan, 'produk': i.produk, 'jumlah': i.jumlah, 'harga': i.harga, 'total': i.total, 'jatuh_tempo': i.jatuh_tempo, 'status': i.status, 'tanggal': i.tanggal.strftime('%d/%m/%Y')} for i in invoices])
 
-@app.route("/api/invoice", methods=["POST"])
+@app.route('/api/invoice', methods=['POST'])
+@login_required
 def add_invoice():
-    data = load_data()
-    body = request.json
-    inv = {
-        "id": len(data["invoice"]) + 1,
-        "nomor": f"INV-{datetime.datetime.now().strftime('%Y%m%d')}-{len(data['invoice'])+1:03d}",
-        "pelanggan": body["pelanggan"],
-        "produk": body["produk"],
-        "jumlah": int(body["jumlah"]),
-        "harga": int(body["harga"]),
-        "total": int(body["jumlah"]) * int(body["harga"]),
-        "tanggal": datetime.datetime.now().strftime("%d/%m/%Y"),
-        "jatuh_tempo": body["jatuh_tempo"],
-        "status": "Belum Bayar"
-    }
-    data["invoice"].append(inv)
-    save_data(data)
-    return jsonify(inv)
+    b = request.json
+    nomor = f"INV-{datetime.now().strftime('%Y%m%d')}-{Invoice.query.count()+1:03d}"
+    i = Invoice(nomor=nomor, pelanggan=b['pelanggan'], produk=b['produk'], jumlah=int(b['jumlah']), harga=int(b['harga']), total=int(b['jumlah'])*int(b['harga']), jatuh_tempo=b.get('jatuh_tempo', '-'))
+    db.session.add(i)
+    db.session.commit()
+    return jsonify({'id': i.id, 'nomor': i.nomor})
 
-@app.route("/api/invoice/<int:iid>/lunas", methods=["POST"])
+@app.route('/api/invoice/<int:iid>/lunas', methods=['POST'])
+@login_required
 def lunas_invoice(iid):
-    data = load_data()
-    for inv in data["invoice"]:
-        if inv["id"] == iid:
-            inv["status"] = "Lunas"
-    save_data(data)
-    return jsonify({"ok": True})
+    i = Invoice.query.get_or_404(iid)
+    i.status = 'Lunas'
+    db.session.commit()
+    return jsonify({'ok': True})
 
-@app.route("/api/dashboard", methods=["GET"])
-def dashboard():
-    data = load_data()
-    total_pendapatan = sum(t["total"] for t in data["transaksi"])
-    total_transaksi = len(data["transaksi"])
-    invoice_belum = len([i for i in data["invoice"] if i["status"] == "Belum Bayar"])
-    stok_menipis = len([p for p in data["produk"] if p["stok"] < 10])
+@app.route('/api/invoice/<int:iid>/pdf')
+@login_required
+def cetak_invoice(iid):
+    i = Invoice.query.get_or_404(iid)
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=2*cm, leftMargin=2*cm, topMargin=2*cm, bottomMargin=2*cm)
+    elemen = []
+    judul = ParagraphStyle('judul', fontSize=20, fontName='Helvetica-Bold', spaceAfter=4)
+    normal = ParagraphStyle('normal', fontSize=10, fontName='Helvetica', spaceAfter=4)
+    elemen.append(Paragraph('INVOICE', judul))
+    elemen.append(Paragraph(f'Nomor: {i.nomor}', normal))
+    elemen.append(Paragraph(f'Tanggal: {i.tanggal.strftime("%d/%m/%Y")}', normal))
+    elemen.append(Paragraph(f'Jatuh Tempo: {i.jatuh_tempo}', normal))
+    elemen.append(Spacer(1, 0.3*cm))
+    elemen.append(Paragraph(f'Kepada: {i.pelanggan}', normal))
+    elemen.append(Spacer(1, 0.5*cm))
+    data = [['Produk/Layanan', 'Jumlah', 'Harga Satuan', 'Total'],
+            [i.produk, str(i.jumlah), f"Rp {i.harga:,}", f"Rp {i.total:,}"],
+            ['', '', 'TOTAL', f"Rp {i.total:,}"]]
+    tabel = Table(data, colWidths=[8*cm, 2*cm, 4*cm, 4*cm])
+    tabel.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#6c63ff')),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('ALIGN', (1,0), (-1,-1), 'CENTER'),
+        ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'),
+        ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor('#f0f0f0')),
+        ('GRID', (0,0), (-1,-2), 0.5, colors.grey),
+        ('LINEABOVE', (0,-1), (-1,-1), 1, colors.black),
+    ]))
+    elemen.append(tabel)
+    elemen.append(Spacer(1, 0.5*cm))
+    elemen.append(Paragraph(f'Status: {i.status}', normal))
+    doc.build(elemen)
+    buffer.seek(0)
+    return send_file(buffer, mimetype='application/pdf', download_name=f'invoice-{i.nomor}.pdf')
+
+@app.route('/api/struk/<int:tid>')
+@login_required
+def cetak_struk(tid):
+    t = Transaksi.query.get_or_404(tid)
+    items = json.loads(t.items or '[]')
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=2*cm, leftMargin=2*cm, topMargin=2*cm, bottomMargin=2*cm)
+    elemen = []
+    judul = ParagraphStyle('judul', fontSize=16, fontName='Helvetica-Bold', alignment=1, spaceAfter=4)
+    sub = ParagraphStyle('sub', fontSize=10, fontName='Helvetica', alignment=1, spaceAfter=2)
+    elemen.append(Paragraph('TOKO UMKM PRO', judul))
+    elemen.append(Paragraph('Struk Pembelian', sub))
+    elemen.append(Paragraph(f'No: TRX-{t.id:04d}', sub))
+    elemen.append(Paragraph(f'Tanggal: {t.tanggal.strftime("%d/%m/%Y %H:%M")}', sub))
+    elemen.append(Paragraph(f'Pelanggan: {t.pelanggan}', sub))
+    elemen.append(Spacer(1, 0.3*cm))
+    data = [['Produk', 'Qty', 'Harga', 'Subtotal']]
+    for item in items:
+        p = Produk.query.get(item['id'])
+        if p:
+            subtotal = p.harga * item['qty']
+            data.append([p.nama, str(item['qty']), f"Rp {p.harga:,}", f"Rp {subtotal:,}"])
+    data.append(['', '', 'TOTAL', f"Rp {t.total:,}"])
+    tabel = Table(data, colWidths=[8*cm, 2*cm, 4*cm, 4*cm])
+    tabel.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#6c63ff')),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('ALIGN', (1,0), (-1,-1), 'CENTER'),
+        ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'),
+        ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor('#f0f0f0')),
+        ('GRID', (0,0), (-1,-2), 0.5, colors.grey),
+        ('LINEABOVE', (0,-1), (-1,-1), 1, colors.black),
+        ('ROWBACKGROUNDS', (0,1), (-1,-2), [colors.white, colors.HexColor('#f9f9f9')]),
+    ]))
+    elemen.append(tabel)
+    elemen.append(Spacer(1, 0.5*cm))
+    elemen.append(Paragraph('Terima kasih telah berbelanja!', ParagraphStyle('thanks', fontSize=10, fontName='Helvetica-Bold', alignment=1)))
+    doc.build(elemen)
+    buffer.seek(0)
+    return send_file(buffer, mimetype='application/pdf', download_name=f'struk-{t.id}.pdf')
+
+@app.route('/api/users', methods=['GET'])
+@login_required
+def get_users():
+    if current_user.role != 'owner':
+        return jsonify({'error': 'Akses ditolak'}), 403
+    users = User.query.all()
+    return jsonify([{'id': u.id, 'username': u.username, 'nama': u.nama, 'role': u.role} for u in users])
+
+@app.route('/api/users', methods=['POST'])
+@login_required
+def add_user():
+    if current_user.role != 'owner':
+        return jsonify({'error': 'Akses ditolak'}), 403
+    b = request.json
+    if User.query.filter_by(username=b['username']).first():
+        return jsonify({'error': 'Username sudah dipakai'}), 400
+    u = User(username=b['username'], password=bcrypt.generate_password_hash(b['password']).decode('utf-8'), role=b.get('role', 'kasir'), nama=b['nama'])
+    db.session.add(u)
+    db.session.commit()
+    return jsonify({'id': u.id, 'username': u.username, 'nama': u.nama, 'role': u.role})
+
+@app.route('/api/users/<int:uid>', methods=['DELETE'])
+@login_required
+def del_user(uid):
+    if current_user.role != 'owner':
+        return jsonify({'error': 'Akses ditolak'}), 403
+    if uid == current_user.id:
+        return jsonify({'error': 'Tidak bisa hapus akun sendiri'}), 400
+    u = User.query.get_or_404(uid)
+    db.session.delete(u)
+    db.session.commit()
+    return jsonify({'ok': True})
+
+@app.route('/api/users/<int:uid>/password', methods=['POST'])
+@login_required
+def ganti_password(uid):
+    if current_user.role != 'owner':
+        return jsonify({'error': 'Akses ditolak'}), 403
+    u = User.query.get_or_404(uid)
+    b = request.json
+    u.password = bcrypt.generate_password_hash(b['password']).decode('utf-8')
+    db.session.commit()
+    return jsonify({'ok': True})
+    
+@app.route('/api/stok-alert')
+@login_required
+def stok_alert():
+    batas = request.args.get('batas', 10, type=int)
+    menipis = Produk.query.filter(Produk.stok <= batas).all()
     return jsonify({
-        "total_pendapatan": total_pendapatan,
-        "total_transaksi": total_transaksi,
-        "invoice_belum": invoice_belum,
-        "stok_menipis": stok_menipis,
-        "transaksi_terakhir": data["transaksi"][-5:][::-1]
+        'jumlah': len(menipis),
+        'produk': [{'id': p.id, 'nama': p.nama, 'stok': p.stok, 'harga': p.harga} for p in menipis]
     })
 
-if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000)
+@app.route('/api/laporan')
+@login_required
+def laporan():
+    from collections import defaultdict
+    import pandas as pd
+    
+    # Data 30 hari terakhir
+    transaksi = Transaksi.query.order_by(Transaksi.tanggal.asc()).all()
+    
+    # Pendapatan per hari
+    per_hari = defaultdict(int)
+    for t in transaksi:
+        tgl = t.tanggal.strftime('%d/%m')
+        per_hari[tgl] += t.total
+    
+    # Pendapatan per bulan
+    per_bulan = defaultdict(int)
+    for t in transaksi:
+        bln = t.tanggal.strftime('%b %Y')
+        per_bulan[bln] += t.total
+
+    # Produk terlaris
+    produk_count = defaultdict(int)
+    for t in transaksi:
+        items = json.loads(t.items or '[]')
+        for item in items:
+            p = Produk.query.get(item['id'])
+            if p:
+                produk_count[p.nama] += item['qty']
+    
+    terlaris = sorted(produk_count.items(), key=lambda x: x[1], reverse=True)[:5]
+    
+    return jsonify({
+        'per_hari': [{'tanggal': k, 'total': v} for k, v in list(per_hari.items())[-14:]],
+        'per_bulan': [{'bulan': k, 'total': v} for k, v in per_bulan.items()],
+        'terlaris': [{'nama': k, 'qty': v} for k, v in terlaris],
+        'total_pendapatan': sum(t.total for t in transaksi),
+        'rata_per_hari': int(sum(t.total for t in transaksi) / max(len(per_hari), 1)),
+        'total_transaksi': len(transaksi),
+    })
+
+@app.route('/api/dashboard', methods=['GET'])
+@login_required
+def dashboard():
+    total_pendapatan = db.session.query(db.func.sum(Transaksi.total)).scalar() or 0
+    total_transaksi = Transaksi.query.count()
+    invoice_belum = Invoice.query.filter_by(status='Belum Bayar').count()
+    stok_menipis = Produk.query.filter(Produk.stok < 10).count()
+    transaksi_terakhir = Transaksi.query.order_by(Transaksi.tanggal.desc()).limit(5).all()
+    return jsonify({
+        'total_pendapatan': total_pendapatan,
+        'total_transaksi': total_transaksi,
+        'invoice_belum': invoice_belum,
+        'stok_menipis': stok_menipis,
+        'transaksi_terakhir': [{'id': t.id, 'pelanggan': t.pelanggan, 'total': t.total, 'items': json.loads(t.items or '[]'), 'tanggal': t.tanggal.strftime('%d/%m/%Y %H:%M')} for t in transaksi_terakhir]
+    })
+
+with app.app_context():
+    db.create_all()
+    if User.query.count() == 0:
+        db.session.add_all([
+            User(username='owner', password=bcrypt.generate_password_hash('owner123').decode('utf-8'), role='owner', nama='Martin Owner'),
+            User(username='kasir', password=bcrypt.generate_password_hash('kasir123').decode('utf-8'), role='kasir', nama='Kasir 1'),
+        ])
+        db.session.commit()
+    if Produk.query.count() == 0:
+        db.session.add_all([
+            Produk(nama='E-book Panduan Bisnis', harga=85000, modal=10000, stok=50),
+            Produk(nama='Template Excel Keuangan', harga=45000, modal=5000, stok=30),
+            Produk(nama='Software Kasir Lite', harga=150000, modal=20000, stok=99),
+        ])
+        db.session.commit()
+
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=5000)

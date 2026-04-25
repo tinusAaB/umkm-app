@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login — UMKM Pro</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Sora', sans-serif; background: #0f0f13; color: #e8e8f0; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+.card { background: #1a1a24; border: 1px solid rgba(255,255,255,0.07); border-radius: 20px; padding: 40px; width: 100%; max-width: 380px; }
+.logo { font-size: 24px; font-weight: 600; text-align: center; margin-bottom: 8px; }
+.logo span { color: #a78bfa; }
+.sub { font-size: 13px; color: #8888a0; text-align: center; margin-bottom: 32px; }
+.field { margin-bottom: 16px; }
+.field label { display: block; font-size: 11px; color: #8888a0; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+.field input { width: 100%; background: #0f0f13; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 12px 14px; color: #e8e8f0; font-family: 'Sora', sans-serif; font-size: 14px; outline: none; transition: border 0.2s; }
+.field input:focus { border-color: #6c63ff; }
+.btn { width: 100%; padding: 13px; border-radius: 10px; background: #6c63ff; color: #fff; font-family: 'Sora', sans-serif; font-size: 14px; font-weight: 500; border: none; cursor: pointer; margin-top: 8px; transition: background 0.2s; }
+.btn:hover { background: #5b53ee; }
+.error { background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.2); color: #f87171; border-radius: 8px; padding: 10px 14px; font-size: 13px; margin-bottom: 16px; display: none; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">UMKM<span>Pro</span></div>
+  <div class="sub">Masuk ke akun Anda</div>
+  <div class="error" id="error-msg"></div>
+  <div class="field">
+    <label>Username</label>
+    <input type="text" id="username" placeholder="Contoh: owner" />
+  </div>
+  <div class="field">
+    <label>Password</label>
+    <input type="password" id="password" placeholder="Password Anda" onkeydown="if(event.key==='Enter')doLogin()" />
+  </div>
+  <button class="btn" onclick="doLogin()">Masuk</button>
+</div>
+<script>
+async function doLogin() {
+  var username = document.getElementById('username').value;
+  var password = document.getElementById('password').value;
+  var err = document.getElementById('error-msg');
+  err.style.display = 'none';
+  if (!username || !password) { err.textContent = 'Username dan password wajib diisi!'; err.style.display = 'block'; return; }
+  var res = await fetch('/login', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({username, password}) });
+  if (res.ok) { window.location.href = '/'; }
+  else { var d = await res.json(); err.textContent = d.pesan || 'Login gagal'; err.style.display = 'block'; }
+}
+</script>
+</body>
+</html>
