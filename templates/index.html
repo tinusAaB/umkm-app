@@ -466,7 +466,9 @@ async function bayarOnline() {
   });
   if (!res.ok) { toast('Gagal membuat pembayaran: ' + res.error); return; }
   // Buka halaman pembayaran Midtrans di tab baru
-  window.open(res.redirect_url, '_blank');
+  console.log('Response:', res);
+console.log('Redirect URL:', res.redirect_url);
+window.open(res.redirect_url, '_blank');
   keranjang = [];
   renderKeranjang();
   toast('Halaman pembayaran dibuka di tab baru!');
