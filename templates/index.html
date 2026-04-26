@@ -183,6 +183,7 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px;
     <div class="card">
       <div class="card-title">Transaksi baru</div>
       <div class="field"><label>Pelanggan</label><input id="k-pelanggan" placeholder="Nama pelanggan (opsional)" /></div>
+      <div class="field"><label>No. WhatsApp Pelanggan</label><input id="k-nowa" placeholder="Contoh: 08123456789 (opsional)" /></div>
       <div class="field"><label>Pilih produk</label><select id="k-produk"></select></div>
       <div class="field"><label>Jumlah</label><input id="k-qty" type="number" value="1" min="1" /></div>
       <button class="btn btn-ghost" onclick="tambahKeKeranjang()">+ Tambah ke keranjang</button>
@@ -476,10 +477,12 @@ window.open(res.redirect_url, '_blank');
 async function prosesTransaksi() {
   if (!keranjang.length) { toast('Keranjang masih kosong!'); return; }
   var pelanggan = document.getElementById('k-pelanggan').value || 'Umum';
-  await api('/api/transaksi', 'POST', {items: keranjang.map(function(i){ return {id:i.id, qty:i.qty}; }), pelanggan: pelanggan});
+  var nowa = document.getElementById('k-nowa').value || '';
+await api('/api/transaksi', 'POST', {items: keranjang.map(function(i){ return {id:i.id, qty:i.qty}; }), pelanggan: pelanggan, nomor_wa: nowa});
   keranjang = [];
   renderKeranjang();
   document.getElementById('k-pelanggan').value = '';
+  document.getElementById('k-nowa').value = '';
   toast('Pembayaran berhasil! ✓');
 }
 

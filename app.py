@@ -155,6 +155,19 @@ def add_transaksi():
     t = Transaksi(pelanggan=b.get('pelanggan', 'Umum'), total=total, items=json.dumps(items))
     db.session.add(t)
     db.session.commit()
+    nomor = b.get('nomor_wa', '')
+    if nomor:
+        pesan = f"✅ *Struk Pembelian UMKM Pro*\n\n"
+        pesan += f"No: TRX-{t.id:04d}\n"
+        pesan += f"Pelanggan: {t.pelanggan}\n"
+        pesan += f"Tanggal: {t.tanggal.strftime('%d/%m/%Y %H:%M')}\n\n"
+        for item in items:
+            p = Produk.query.get(item['id'])
+            if p:
+                pesan += f"- {p.nama} x{item['qty']} = Rp {p.harga * item['qty']:,}\n"
+        pesan += f"\n*Total: Rp {total:,}*\n\n"
+        pesan += "Terima kasih telah berbelanja! 🙏"
+        kirim_whatsapp(nomor, pesan)
     return jsonify({'id': t.id, 'total': total})
 
 @app.route('/api/invoice', methods=['GET'])
@@ -304,6 +317,27 @@ def ganti_password(uid):
     db.session.commit()
     return jsonify({'ok': True})
     
+def kirim_whatsapp(nomor, pesan):
+    import requests
+    token = os.environ.get('FONNTE_TOKEN', '')
+    if not token:
+        print("FONNTE_TOKEN tidak ditemukan")
+        return False
+    try:
+        response = requests.post('https://api.fonnte.com/send', 
+            headers={'Authorization': token},
+            data={
+                'target': nomor,
+                'message': pesan,
+                'countryCode': '62'
+            }
+        )
+        print(f"WhatsApp sent: {response.json()}")
+        return True
+    except Exception as e:
+        print(f"WhatsApp error: {str(e)}")
+        return False
+        
 @app.route('/api/bayar', methods=['POST'])
 @login_required
 def bayar():
