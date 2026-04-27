@@ -74,6 +74,7 @@ class Produk(db.Model):
     harga = db.Column(db.Integer, nullable=False)
     modal = db.Column(db.Integer, default=0)
     stok = db.Column(db.Integer, default=0)
+    kategori = db.Column(db.String(100), default='Umum')
     dibuat = db.Column(db.DateTime, default=datetime.now)
 
 class Transaksi(db.Model):
@@ -199,13 +200,13 @@ def update_toko():
 @login_required
 def get_produk():
     produk = Produk.query.all()
-    return jsonify([{'id': p.id, 'nama': p.nama, 'harga': p.harga, 'modal': p.modal, 'stok': p.stok} for p in produk])
+    return jsonify([{'id': p.id, 'nama': p.nama, 'harga': p.harga, 'modal': p.modal, 'stok': p.stok, 'kategori': p.kategori} for p in produk])
 
 @app.route('/api/produk', methods=['POST'])
 @login_required
 def add_produk():
     b = request.json
-    p = Produk(nama=b['nama'], harga=int(b['harga']), modal=int(b.get('modal', 0)), stok=int(b.get('stok', 99)))
+    p = Produk(nama=b['nama'], harga=int(b['harga']), modal=int(b.get('modal', 0)), stok=int(b.get('stok', 99)), kategori=b.get('kategori', 'Umum'))
     db.session.add(p)
     db.session.commit()
     return jsonify({'id': p.id, 'nama': p.nama, 'harga': p.harga, 'modal': p.modal, 'stok': p.stok})

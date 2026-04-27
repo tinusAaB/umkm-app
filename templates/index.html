@@ -225,11 +225,42 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px;
         <div class="field"><label>Harga jual</label><input id="s-harga" type="number" placeholder="75000" /></div>
         <div class="field"><label>Modal</label><input id="s-modal" type="number" placeholder="15000" /></div>
       </div>
+      <div class="field"><label>Kategori</label>
+  <select id="s-kategori">
+    <option value="Umum">Umum</option>
+    <option value="Makanan">Makanan</option>
+    <option value="Minuman">Minuman</option>
+    <option value="Elektronik">Elektronik</option>
+    <option value="Pakaian">Pakaian</option>
+    <option value="Kesehatan">Kesehatan</option>
+    <option value="Lainnya">Lainnya</option>
+  </select>
+</div>
       <div class="field"><label>Stok awal</label><input id="s-stok" type="number" value="99" /></div>
       <button class="btn btn-primary" onclick="tambahProduk()">Tambah Produk</button>
     </div>
     <div class="card">
       <div class="card-title">Inventori produk</div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+  <input id="s-search" type="text" placeholder="🔍 Cari produk..." oninput="filterStok()" style="flex:1;min-width:150px;background:var(--bg);border:1.5px solid var(--border2);border-radius:var(--radius-sm);padding:8px 12px;font-family:Plus Jakarta Sans,sans-serif;font-size:13px;outline:none;color:var(--text);" />
+  <select id="s-filter-kategori" onchange="filterStok()" style="background:var(--bg);border:1.5px solid var(--border2);border-radius:var(--radius-sm);padding:8px 12px;font-family:Plus Jakarta Sans,sans-serif;font-size:13px;outline:none;color:var(--text);">
+    <option value="">Semua Kategori</option>
+    <option value="Umum">Umum</option>
+    <option value="Makanan">Makanan</option>
+    <option value="Minuman">Minuman</option>
+    <option value="Elektronik">Elektronik</option>
+    <option value="Pakaian">Pakaian</option>
+    <option value="Kesehatan">Kesehatan</option>
+    <option value="Lainnya">Lainnya</option>
+  </select>
+  <select id="s-urutan" onchange="filterStok()" style="background:var(--bg);border:1.5px solid var(--border2);border-radius:var(--radius-sm);padding:8px 12px;font-family:Plus Jakarta Sans,sans-serif;font-size:13px;outline:none;color:var(--text);">
+    <option value="nama">Nama A-Z</option>
+    <option value="stok-asc">Stok Tersedikit</option>
+    <option value="stok-desc">Stok Terbanyak</option>
+    <option value="harga-asc">Harga Termurah</option>
+    <option value="harga-desc">Harga Termahal</option>
+  </select>
+</div>
       <div id="stok-list"><div class="empty"><div class="empty-icon">📦</div>Belum ada produk</div></div>
     </div>
   </div>
@@ -516,16 +547,34 @@ async function lunasInvoice(id) {
   toast('Invoice ditandai lunas ✓');
   loadInvoice();
 }
-
-async function loadStok() {
-  produkList = await api('/api/produk');
+function filterStok() {
+  var search = document.getElementById('s-search') ? document.getElementById('s-search').value.toLowerCase() : '';
+  var kategori = document.getElementById('s-filter-kategori') ? document.getElementById('s-filter-kategori').value : '';
+  var urutan = document.getElementById('s-urutan') ? document.getElementById('s-urutan').value : 'nama';
+  var filtered = produkList.filter(function(p) {
+    var matchSearch = p.nama.toLowerCase().includes(search);
+    var matchKategori = kategori === '' || p.kategori === kategori;
+    return matchSearch && matchKategori;
+  });
+  filtered.sort(function(a, b) {
+    if (urutan === 'nama') return a.nama.localeCompare(b.nama);
+    if (urutan === 'stok-asc') return a.stok - b.stok;
+    if (urutan === 'stok-desc') return b.stok - a.stok;
+    if (urutan === 'harga-asc') return a.harga - b.harga;
+    if (urutan === 'harga-desc') return b.harga - a.harga;
+    return 0;
+  });
   var el = document.getElementById('stok-list');
-  if (!produkList.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">📦</div>Belum ada produk</div>'; return; }
-  el.innerHTML = produkList.map(function(p){
+  if (!filtered.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">🔍</div>Produk tidak ditemukan</div>'; return; }
+  el.innerHTML = filtered.map(function(p){
     var badge = p.stok < 10 ? 'badge-amber' : 'badge-green';
     var label = p.stok < 10 ? 'Menipis' : 'Aman';
-    return '<div class="list-item"><div class="li-icon" style="background:var(--green-bg)">📦</div><div class="li-body"><div class="li-name">'+p.nama+'</div><div class="li-sub">Modal: '+fmt(p.modal)+' · Stok: '+p.stok+'</div></div><div class="li-right"><div class="li-price">'+fmt(p.harga)+'</div><span class="li-badge '+badge+'">'+label+'</span><br><button class="btn btn-sm btn-red" style="margin-top:4px;" onclick="hapusProduk('+p.id+')">Hapus</button></div></div>';
+    return '<div class="list-item"><div class="li-icon" style="background:var(--green-bg)">📦</div><div class="li-body"><div class="li-name">'+p.nama+'</div><div class="li-sub">'+(p.kategori||'Umum')+' · Modal: '+fmt(p.modal)+' · Stok: '+p.stok+'</div></div><div class="li-right"><div class="li-price">'+fmt(p.harga)+'</div><span class="li-badge '+badge+'">'+label+'</span><br><button class="btn btn-sm btn-red" style="margin-top:4px;" onclick="hapusProduk('+p.id+')">Hapus</button></div></div>';
   }).join('');
+}
+async function loadStok() {
+  produkList = await api('/api/produk');
+  filterStok();
 }
 
 async function tambahProduk() {
@@ -534,7 +583,8 @@ async function tambahProduk() {
   var modal = document.getElementById('s-modal').value;
   var stok = document.getElementById('s-stok').value;
   if (!nama || !harga) { toast('Nama dan harga wajib diisi!'); return; }
-  await api('/api/produk', 'POST', {nama, harga, modal: modal||0, stok: stok||99});
+  var kategori = document.getElementById('s-kategori').value;
+  await api('/api/produk', 'POST', {nama, harga, modal: modal||0, stok: stok||99, kategori: kategori});
   document.getElementById('s-nama').value = '';
   document.getElementById('s-harga').value = '';
   document.getElementById('s-modal').value = '';
