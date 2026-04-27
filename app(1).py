@@ -27,20 +27,13 @@ MIDTRANS_SERVER_KEY = os.environ.get('MIDTRANS_SERVER_KEY', '')
 MIDTRANS_CLIENT_KEY = os.environ.get('MIDTRANS_CLIENT_KEY', '')
 print(f"Server Key loaded: {MIDTRANS_SERVER_KEY[:10]}...")
 
-snap = midtransclient.Snap(
-    is_production=False,
-    server_key=MIDTRANS_SERVER_KEY
-)
+snap = midtransclient.Snap(is_production=False, server_key=MIDTRANS_SERVER_KEY)
 
 @app.after_request
 def add_security_headers(response):
     response.headers['Content-Security-Policy'] = (
-        "default-src *; "
-        "script-src * 'unsafe-inline' 'unsafe-eval'; "
-        "style-src * 'unsafe-inline'; "
-        "frame-src *; "
-        "connect-src *; "
-        "img-src * data:;"
+        "default-src *; script-src * 'unsafe-inline' 'unsafe-eval'; "
+        "style-src * 'unsafe-inline'; frame-src *; connect-src *; img-src * data:;"
     )
     return response
 
@@ -222,7 +215,11 @@ def del_produk(pid):
 @login_required
 def get_transaksi():
     transaksi = Transaksi.query.order_by(Transaksi.tanggal.desc()).all()
-    return jsonify([{'id': t.id, 'pelanggan': t.pelanggan, 'total': t.total, 'items': json.loads(t.items or '[]'), 'tanggal': t.tanggal.strftime('%d/%m/%Y %H:%M')} for t in transaksi])
+    return jsonify([{
+        'id': t.id, 'pelanggan': t.pelanggan, 'kasir': t.kasir,
+        'total': t.total, 'items': json.loads(t.items or '[]'),
+        'tanggal': t.tanggal.strftime('%d/%m/%Y %H:%M')
+    } for t in transaksi])
 
 @app.route('/api/transaksi', methods=['POST'])
 @login_required
@@ -236,11 +233,11 @@ def add_transaksi():
             p.stok = max(0, p.stok - item['qty'])
             total += p.harga * item['qty']
     t = Transaksi(
-    pelanggan=b.get('pelanggan', 'Umum'),
-    kasir=current_user.nama or current_user.username,
-    total=total,
-    items=json.dumps(items)
-)
+        pelanggan=b.get('pelanggan', 'Umum'),
+        kasir=current_user.nama,
+        total=total,
+        items=json.dumps(items)
+    )
     db.session.add(t)
     db.session.commit()
     nomor = b.get('nomor_wa', '')
@@ -250,6 +247,7 @@ def add_transaksi():
         pesan = f"✅ *Struk Pembelian {nama_toko}*\n\n"
         pesan += f"No: TRX-{t.id:04d}\n"
         pesan += f"Pelanggan: {t.pelanggan}\n"
+        pesan += f"Kasir: {t.kasir}\n"
         pesan += f"Tanggal: {t.tanggal.strftime('%d/%m/%Y %H:%M')}\n\n"
         for item in items:
             p = Produk.query.get(item['id'])
@@ -264,14 +262,24 @@ def add_transaksi():
 @login_required
 def get_invoice():
     invoices = Invoice.query.order_by(Invoice.tanggal.desc()).all()
-    return jsonify([{'id': i.id, 'nomor': i.nomor, 'pelanggan': i.pelanggan, 'produk': i.produk, 'jumlah': i.jumlah, 'harga': i.harga, 'total': i.total, 'jatuh_tempo': i.jatuh_tempo, 'status': i.status, 'tanggal': i.tanggal.strftime('%d/%m/%Y')} for i in invoices])
+    return jsonify([{
+        'id': i.id, 'nomor': i.nomor, 'pelanggan': i.pelanggan,
+        'produk': i.produk, 'jumlah': i.jumlah, 'harga': i.harga,
+        'total': i.total, 'jatuh_tempo': i.jatuh_tempo,
+        'status': i.status, 'tanggal': i.tanggal.strftime('%d/%m/%Y')
+    } for i in invoices])
 
 @app.route('/api/invoice', methods=['POST'])
 @login_required
 def add_invoice():
     b = request.json
     nomor = f"INV-{datetime.now().strftime('%Y%m%d')}-{Invoice.query.count()+1:03d}"
-    i = Invoice(nomor=nomor, pelanggan=b['pelanggan'], produk=b['produk'], jumlah=int(b['jumlah']), harga=int(b['harga']), total=int(b['jumlah'])*int(b['harga']), jatuh_tempo=b.get('jatuh_tempo', '-'))
+    i = Invoice(
+        nomor=nomor, pelanggan=b['pelanggan'], produk=b['produk'],
+        jumlah=int(b['jumlah']), harga=int(b['harga']),
+        total=int(b['jumlah'])*int(b['harga']),
+        jatuh_tempo=b.get('jatuh_tempo', '-')
+    )
     db.session.add(i)
     db.session.commit()
     return jsonify({'id': i.id, 'nomor': i.nomor})
@@ -291,6 +299,7 @@ def cetak_invoice(iid):
     toko = Toko.query.first()
     nama_toko = toko.nama if toko else 'UMKM Pro'
     alamat_toko = toko.alamat if toko else ''
+    telepon_toko = toko.telepon if toko else ''
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=2*cm, leftMargin=2*cm, topMargin=2*cm, bottomMargin=2*cm)
     elemen = []
@@ -299,6 +308,8 @@ def cetak_invoice(iid):
     elemen.append(Paragraph(f'INVOICE — {nama_toko.upper()}', judul))
     if alamat_toko:
         elemen.append(Paragraph(alamat_toko, normal))
+    if telepon_toko:
+        elemen.append(Paragraph(f'Telp: {telepon_toko}', normal))
     elemen.append(Paragraph(f'Nomor: {i.nomor}', normal))
     elemen.append(Paragraph(f'Tanggal: {i.tanggal.strftime("%d/%m/%Y")}', normal))
     elemen.append(Paragraph(f'Jatuh Tempo: {i.jatuh_tempo}', normal))
@@ -322,6 +333,7 @@ def cetak_invoice(iid):
     elemen.append(tabel)
     elemen.append(Spacer(1, 0.5*cm))
     elemen.append(Paragraph(f'Status: {i.status}', normal))
+    elemen.append(Paragraph(f'Dibuat oleh: {current_user.nama}', normal))
     doc.build(elemen)
     buffer.seek(0)
     return send_file(buffer, mimetype='application/pdf', download_name=f'invoice-{i.nomor}.pdf')
@@ -451,14 +463,11 @@ def laporan():
     per_hari = defaultdict(int)
     per_bulan = defaultdict(int)
     for t in transaksi:
-        tgl = t.tanggal.strftime('%d/%m')
-        per_hari[tgl] += t.total
-        bln = t.tanggal.strftime('%b %Y')
-        per_bulan[bln] += t.total
+        per_hari[t.tanggal.strftime('%d/%m')] += t.total
+        per_bulan[t.tanggal.strftime('%b %Y')] += t.total
     produk_count = defaultdict(int)
     for t in transaksi:
-        items = json.loads(t.items or '[]')
-        for item in items:
+        for item in json.loads(t.items or '[]'):
             p = Produk.query.get(item['id'])
             if p:
                 produk_count[p.nama] += item['qty']
@@ -479,8 +488,7 @@ def neraca():
     total_hpp = 0
     transaksi = Transaksi.query.all()
     for t in transaksi:
-        items = json.loads(t.items or '[]')
-        for item in items:
+        for item in json.loads(t.items or '[]'):
             p = Produk.query.get(item['id'])
             if p:
                 total_hpp += p.modal * item['qty']
@@ -505,14 +513,27 @@ def dashboard():
     stok_menipis = Produk.query.filter(Produk.stok < 10).count()
     transaksi_terakhir = Transaksi.query.order_by(Transaksi.tanggal.desc()).limit(5).all()
     return jsonify({
-        'total_pendapatan': total_pendapatan, 'total_transaksi': total_transaksi,
-        'invoice_belum': invoice_belum, 'stok_menipis': stok_menipis,
-        'transaksi_terakhir': [{'id': t.id, 'pelanggan': t.pelanggan, 'total': t.total, 'items': json.loads(t.items or '[]'), 'tanggal': t.tanggal.strftime('%d/%m/%Y %H:%M')} for t in transaksi_terakhir]
+        'total_pendapatan': total_pendapatan,
+        'total_transaksi': total_transaksi,
+        'invoice_belum': invoice_belum,
+        'stok_menipis': stok_menipis,
+        'transaksi_terakhir': [{
+            'id': t.id, 'pelanggan': t.pelanggan, 'kasir': t.kasir,
+            'total': t.total, 'items': json.loads(t.items or '[]'),
+            'tanggal': t.tanggal.strftime('%d/%m/%Y %H:%M')
+        } for t in transaksi_terakhir]
     })
 
 with app.app_context():
     try:
         db.create_all()
+        # Tambah kolom kasir kalau belum ada
+        from sqlalchemy import text
+        try:
+            db.session.execute(text("ALTER TABLE transaksi ADD COLUMN IF NOT EXISTS kasir VARCHAR(100) DEFAULT 'Kasir'"))
+            db.session.commit()
+        except:
+            db.session.rollback()
     except Exception as e:
         print(f"Database init error: {e}")
 
