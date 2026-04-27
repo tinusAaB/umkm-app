@@ -322,6 +322,7 @@ def cetak_invoice(iid):
     elemen.append(tabel)
     elemen.append(Spacer(1, 0.5*cm))
     elemen.append(Paragraph(f'Status: {i.status}', normal))
+    elemen.append(Paragraph(f'Dibuat oleh: {current_user.nama}', normal))
     doc.build(elemen)
     buffer.seek(0)
     return send_file(buffer, mimetype='application/pdf', download_name=f'invoice-{i.nomor}.pdf')
