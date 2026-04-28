@@ -185,7 +185,22 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px;
       <div class="card-title">Transaksi baru</div>
       <div class="field"><label>Pelanggan</label><input id="k-pelanggan" placeholder="Nama pelanggan (opsional)" /></div>
       <div class="field"><label>No. WhatsApp Pelanggan</label><input id="k-nowa" placeholder="Contoh: 08123456789 (opsional)" /></div>
-      <div class="field"><label>Pilih produk</label><select id="k-produk"></select></div>
+      <div class="field"><label>Filter kategori</label>
+  <select id="k-kategori-filter" onchange="filterProdukKasir()">
+    <option value="">Semua Kategori</option>
+    <option value="Umum">Umum</option>
+    <option value="Makanan">Makanan</option>
+    <option value="Minuman">Minuman</option>
+    <option value="Elektronik">Elektronik</option>
+    <option value="Pakaian">Pakaian</option>
+    <option value="Kesehatan">Kesehatan</option>
+    <option value="Lainnya">Lainnya</option>
+  </select>
+</div>
+<div class="field"><label>Cari produk</label>
+  <input id="k-search" type="text" placeholder="🔍 Ketik nama produk..." oninput="filterProdukKasir()" />
+</div>
+<div class="field"><label>Pilih produk</label><select id="k-produk"></select></div>
       <div class="field"><label>Jumlah</label><input id="k-qty" type="number" value="1" min="1" /></div>
       <button class="btn btn-ghost" onclick="tambahKeKeranjang()">+ Tambah ke keranjang</button>
     </div>
@@ -514,8 +529,25 @@ async function loadDashboard() {
 
 async function loadProdukSelect() {
   produkList = await api('/api/produk');
+  filterProdukKasir();
+}
+
+function filterProdukKasir() {
+  var kategori = document.getElementById('k-kategori-filter') ? document.getElementById('k-kategori-filter').value : '';
+  var search = document.getElementById('k-search') ? document.getElementById('k-search').value.toLowerCase() : '';
+  var filtered = produkList.filter(function(p) {
+    var matchKategori = kategori === '' || p.kategori === kategori;
+    var matchSearch = p.nama.toLowerCase().includes(search);
+    return matchKategori && matchSearch;
+  });
   var sel = document.getElementById('k-produk');
-  sel.innerHTML = produkList.map(function(p){ return '<option value="'+p.id+'">'+p.nama+' — '+fmt(p.harga)+'</option>'; }).join('');
+  if (!filtered.length) {
+    sel.innerHTML = '<option>Produk tidak ditemukan</option>';
+    return;
+  }
+  sel.innerHTML = filtered.map(function(p){
+    return '<option value="'+p.id+'">'+p.nama+' (Stok: '+p.stok+') — '+fmt(p.harga)+'</option>';
+  }).join('');
 }
 
 async function tambahKeKeranjang() {
