@@ -157,6 +157,7 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px;
     <button class="nav-btn" onclick="goPage('laba',this)">Laba</button>
     <button class="nav-btn" onclick="goPage('laporan',this)">Laporan</button>
     <button class="nav-btn" onclick="goPage('neraca',this)">Neraca</button>
+    <button class="nav-btn" onclick="goPage('jurnal',this)">Jurnal</button>
     <button class="nav-btn" id="nav-pengguna" onclick="goPage('pengguna',this)">Pengguna</button>
   </nav>
 
@@ -312,6 +313,56 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px;
   </div>
 </div>
 
+<!-- JURNAL -->
+<div id="page-jurnal" class="page">
+  <div class="welcome" style="background:linear-gradient(135deg,#7c3aed 0%,#4f6ef7 100%);">
+    <div class="welcome-title">📖 Jurnal Keuangan</div>
+    <div class="welcome-sub">Catatan pemasukan & pengeluaran otomatis + manual</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Tambah jurnal manual</div>
+    <div class="field"><label>Keterangan</label><input id="j-ket" placeholder="Contoh: Bayar listrik bulan April" /></div>
+    <div class="row2">
+      <div class="field"><label>Jenis</label>
+        <select id="j-jenis">
+          <option value="pemasukan">💰 Pemasukan</option>
+          <option value="pengeluaran">💸 Pengeluaran</option>
+        </select>
+      </div>
+      <div class="field"><label>Kategori</label>
+        <select id="j-kategori">
+          <option value="Penjualan">Penjualan</option>
+          <option value="Operasional">Operasional</option>
+          <option value="Gaji">Gaji</option>
+          <option value="Sewa">Sewa</option>
+          <option value="Listrik/Air">Listrik/Air</option>
+          <option value="Pembelian Stok">Pembelian Stok</option>
+          <option value="Lainnya">Lainnya</option>
+        </select>
+      </div>
+    </div>
+    <div class="field"><label>Nominal (Rp)</label><input id="j-nominal" type="number" placeholder="50000" /></div>
+    <button class="btn btn-primary" onclick="tambahJurnal()">+ Catat Jurnal</button>
+  </div>
+  <div class="card">
+    <div class="card-title">Filter jurnal</div>
+    <div class="row2">
+      <div class="field"><label>Dari tanggal</label><input id="j-dari" type="date" onchange="loadJurnal()" /></div>
+      <div class="field"><label>Sampai tanggal</label><input id="j-sampai" type="date" onchange="loadJurnal()" /></div>
+    </div>
+  </div>
+  <div class="metrics">
+    <div class="metric"><div class="metric-label">Total Pemasukan</div><div class="metric-val green" id="j-total-debit">Rp 0</div></div>
+    <div class="metric"><div class="metric-label">Total Pengeluaran</div><div class="metric-val red" id="j-total-kredit">Rp 0</div></div>
+    <div class="metric"><div class="metric-label">Saldo</div><div class="metric-val blue" id="j-saldo">Rp 0</div></div>
+    <div class="metric"><div class="metric-label">Jumlah Entri</div><div class="metric-val" id="j-count">0</div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Daftar jurnal</div>
+    <div id="jurnal-list"><div class="empty"><div class="empty-icon">📖</div>Belum ada jurnal</div></div>
+  </div>
+</div>
+
 <!-- NERACA -->
 <div id="page-neraca" class="page">
   <div class="welcome" style="background:linear-gradient(135deg,#059669 0%,#0d9488 100%);">
@@ -398,6 +449,7 @@ async function loadWelcome() {
   try {
     var me = await api('/api/me');
     document.getElementById('welcome-name').textContent = 'Halo, ' + me.nama + '! 👋';
+    window._role = me.role;
     if (me.role !== 'owner') {
       var navPengguna = document.getElementById('nav-pengguna');
       if (navPengguna) navPengguna.style.display = 'none';
@@ -436,6 +488,7 @@ function goPage(name, el) {
   if (name === 'laba') { loadLabaAnalisis(); hitungLaba(); }
   if (name === 'laporan') loadLaporan();
   if (name === 'neraca') loadNeraca();
+  if (name === 'jurnal') loadJurnal();
   if (name === 'pengguna') loadUsers();
 }
 
@@ -739,6 +792,49 @@ async function hapusUser(id) {
   if (res.error) { toast(res.error); return; }
   toast('Pengguna dihapus ✓');
   loadUsers();
+}
+
+async function loadJurnal() {
+  var dari = document.getElementById('j-dari').value;
+  var sampai = document.getElementById('j-sampai').value;
+  var url = '/api/jurnal';
+  if (dari || sampai) url += '?dari=' + dari + '&sampai=' + sampai;
+  var d = await api(url);
+  document.getElementById('j-total-debit').textContent = fmt(d.total_debit);
+  document.getElementById('j-total-kredit').textContent = fmt(d.total_kredit);
+  document.getElementById('j-saldo').textContent = fmt(d.saldo);
+  document.getElementById('j-count').textContent = d.jurnal.length;
+  var el = document.getElementById('jurnal-list');
+  if (!d.jurnal.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">📖</div>Belum ada jurnal</div>'; return; }
+  el.innerHTML = d.jurnal.map(function(j){
+    var isDebit = j.jenis === 'pemasukan';
+    var icon = isDebit ? '💰' : '💸';
+    var color = isDebit ? 'var(--green)' : 'var(--red)';
+    var badge = isDebit ? 'badge-green' : 'badge-red';
+    var nominal = isDebit ? j.debit : j.kredit;
+    var prefix = isDebit ? '+' : '-';
+    return '<div class="list-item"><div class="li-icon" style="background:'+(isDebit?'var(--green-bg)':'var(--red-bg)')+'">'+icon+'</div><div class="li-body"><div class="li-name">'+j.keterangan+'</div><div class="li-sub">'+j.tanggal+' · '+j.kategori+' · '+j.sumber+(j.dibuat_oleh?' · '+j.dibuat_oleh:'')+'</div></div><div class="li-right"><div class="li-price" style="color:'+color+'">'+prefix+fmt(nominal)+'</div><span class="li-badge '+badge+'">'+j.jenis+'</span>'+(j.sumber==='manual' && (window._role==='owner')?' <button class="btn btn-sm btn-red" style="margin-top:4px;" onclick="hapusJurnal('+j.id+')">Hapus</button>':'')+'</div></div>';
+  }).join('');
+}
+
+async function tambahJurnal() {
+  var ket = document.getElementById('j-ket').value;
+  var jenis = document.getElementById('j-jenis').value;
+  var kategori = document.getElementById('j-kategori').value;
+  var nominal = document.getElementById('j-nominal').value;
+  if (!ket || !nominal) { toast('Keterangan dan nominal wajib diisi!'); return; }
+  await api('/api/jurnal', 'POST', {keterangan: ket, jenis: jenis, kategori: kategori, nominal: nominal});
+  document.getElementById('j-ket').value = '';
+  document.getElementById('j-nominal').value = '';
+  toast('Jurnal berhasil dicatat! ✓');
+  loadJurnal();
+}
+
+async function hapusJurnal(id) {
+  if (!confirm('Hapus entri jurnal ini?')) return;
+  await api('/api/jurnal/'+id, 'DELETE');
+  toast('Jurnal dihapus ✓');
+  loadJurnal();
 }
 
 loadDashboard();

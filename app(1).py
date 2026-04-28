@@ -78,6 +78,32 @@ class Transaksi(db.Model):
     items = db.Column(db.Text)
     tanggal = db.Column(db.DateTime, default=datetime.now)
 
+class Jurnal(db.Model):
+    __tablename__ = 'jurnal'
+    id = db.Column(db.Integer, primary_key=True)
+    tanggal = db.Column(db.DateTime, default=datetime.now)
+    keterangan = db.Column(db.String(500), nullable=False)
+    kategori = db.Column(db.String(100), default='Umum')
+    jenis = db.Column(db.String(20), default='pemasukan')  # pemasukan/pengeluaran
+    debit = db.Column(db.Integer, default=0)
+    kredit = db.Column(db.Integer, default=0)
+    sumber = db.Column(db.String(50), default='manual')  # manual/kasir/invoice
+    referensi_id = db.Column(db.Integer, default=0)
+    dibuat_oleh = db.Column(db.String(100), default='')
+
+class Jurnal(db.Model):
+    __tablename__ = 'jurnal'
+    id = db.Column(db.Integer, primary_key=True)
+    tanggal = db.Column(db.DateTime, default=datetime.now)
+    keterangan = db.Column(db.String(500), nullable=False)
+    kategori = db.Column(db.String(100), default='Umum')
+    jenis = db.Column(db.String(20), default='pemasukan')
+    debit = db.Column(db.Integer, default=0)
+    kredit = db.Column(db.Integer, default=0)
+    sumber = db.Column(db.String(50), default='manual')
+    referensi_id = db.Column(db.Integer, default=0)
+    dibuat_oleh = db.Column(db.String(100), default='')
+    
 class Invoice(db.Model):
     __tablename__ = 'invoice'
     id = db.Column(db.Integer, primary_key=True)
@@ -256,6 +282,51 @@ def add_transaksi():
         pesan += f"\n*Total: Rp {total:,}*\n\n"
         pesan += "Terima kasih telah berbelanja! 🙏"
         kirim_whatsapp(nomor, pesan)
+
+    # Catat jurnal otomatis
+    j = Jurnal(
+        keterangan=f"Penjualan TRX-{t.id:04d} - {t.pelanggan}",
+        kategori='Penjualan',
+        jenis='pemasukan',
+        debit=total,
+        kredit=0,
+        sumber='kasir',
+        referensi_id=t.id,
+        dibuat_oleh=current_user.nama or current_user.username
+    )
+    db.session.add(j)
+    db.session.commit()
+    # Catat jurnal otomatis dari kasir
+    try:
+        j = Jurnal(
+            keterangan=f"Penjualan TRX-{t.id:04d} - {t.pelanggan}",
+            kategori='Penjualan',
+            jenis='pemasukan',
+            debit=total,
+            kredit=0,
+            sumber='kasir',
+            referensi_id=t.id,
+            dibuat_oleh=current_user.nama or current_user.username
+        )
+        db.session.add(j)
+        db.session.commit()
+    except Exception as e:
+        print(f"Jurnal error: {str(e)}")
+    try:
+        j = Jurnal(
+            keterangan="Penjualan TRX-{:04d} - {}".format(t.id, t.pelanggan),
+            kategori='Penjualan',
+            jenis='pemasukan',
+            debit=total,
+            kredit=0,
+            sumber='kasir',
+            referensi_id=t.id,
+            dibuat_oleh=current_user.nama or current_user.username
+        )
+        db.session.add(j)
+        db.session.commit()
+    except Exception as e:
+        print("Jurnal error: " + str(e))
     return jsonify({'id': t.id, 'total': total})
 
 @app.route('/api/invoice', methods=['GET'])
@@ -445,6 +516,105 @@ def del_user(uid):
         return jsonify({'error': 'Tidak bisa hapus akun sendiri'}), 400
     u = User.query.get_or_404(uid)
     db.session.delete(u)
+    db.session.commit()
+    return jsonify({'ok': True})
+
+@app.route('/api/jurnal', methods=['GET'])
+@login_required
+def get_jurnal():
+    from sqlalchemy import and_
+    tanggal_dari = request.args.get('dari', '')
+    tanggal_sampai = request.args.get('sampai', '')
+    query = Jurnal.query
+    if tanggal_dari:
+        query = query.filter(Jurnal.tanggal >= tanggal_dari)
+    if tanggal_sampai:
+        query = query.filter(Jurnal.tanggal <= tanggal_sampai + ' 23:59:59')
+    jurnal = query.order_by(Jurnal.tanggal.desc()).all()
+    total_debit = sum(j.debit for j in jurnal)
+    total_kredit = sum(j.kredit for j in jurnal)
+    return jsonify({
+        'jurnal': [{'id': j.id, 'tanggal': j.tanggal.strftime('%d/%m/%Y %H:%M'), 'keterangan': j.keterangan, 'kategori': j.kategori, 'jenis': j.jenis, 'debit': j.debit, 'kredit': j.kredit, 'sumber': j.sumber, 'dibuat_oleh': j.dibuat_oleh} for j in jurnal],
+        'total_debit': total_debit,
+        'total_kredit': total_kredit,
+        'saldo': total_debit - total_kredit
+    })
+
+@app.route('/api/jurnal', methods=['POST'])
+@login_required
+def add_jurnal():
+    b = request.json
+    jenis = b.get('jenis', 'pemasukan')
+    nominal = int(b.get('nominal', 0))
+    j = Jurnal(
+        keterangan=b['keterangan'],
+        kategori=b.get('kategori', 'Umum'),
+        jenis=jenis,
+        debit=nominal if jenis == 'pemasukan' else 0,
+        kredit=nominal if jenis == 'pengeluaran' else 0,
+        sumber='manual',
+        dibuat_oleh=current_user.nama or current_user.username
+    )
+    db.session.add(j)
+    db.session.commit()
+    return jsonify({'id': j.id, 'ok': True})
+
+@app.route('/api/jurnal/<int:jid>', methods=['DELETE'])
+@login_required
+def del_jurnal(jid):
+    if current_user.role != 'owner':
+        return jsonify({'error': 'Akses ditolak'}), 403
+    j = Jurnal.query.get_or_404(jid)
+    db.session.delete(j)
+    db.session.commit()
+    return jsonify({'ok': True})
+
+@app.route('/api/jurnal', methods=['GET'])
+@login_required
+def get_jurnal():
+    tanggal_dari = request.args.get('dari', '')
+    tanggal_sampai = request.args.get('sampai', '')
+    query = Jurnal.query
+    if tanggal_dari:
+        query = query.filter(Jurnal.tanggal >= tanggal_dari)
+    if tanggal_sampai:
+        query = query.filter(Jurnal.tanggal <= tanggal_sampai + ' 23:59:59')
+    jurnal = query.order_by(Jurnal.tanggal.desc()).all()
+    total_debit = sum(j.debit for j in jurnal)
+    total_kredit = sum(j.kredit for j in jurnal)
+    return jsonify({
+        'jurnal': [{'id': j.id, 'tanggal': j.tanggal.strftime('%d/%m/%Y %H:%M'), 'keterangan': j.keterangan, 'kategori': j.kategori, 'jenis': j.jenis, 'debit': j.debit, 'kredit': j.kredit, 'sumber': j.sumber, 'dibuat_oleh': j.dibuat_oleh} for j in jurnal],
+        'total_debit': total_debit,
+        'total_kredit': total_kredit,
+        'saldo': total_debit - total_kredit
+    })
+
+@app.route('/api/jurnal', methods=['POST'])
+@login_required
+def add_jurnal():
+    b = request.json
+    jenis = b.get('jenis', 'pemasukan')
+    nominal = int(b.get('nominal', 0))
+    j = Jurnal(
+        keterangan=b['keterangan'],
+        kategori=b.get('kategori', 'Umum'),
+        jenis=jenis,
+        debit=nominal if jenis == 'pemasukan' else 0,
+        kredit=nominal if jenis == 'pengeluaran' else 0,
+        sumber='manual',
+        dibuat_oleh=current_user.nama or current_user.username
+    )
+    db.session.add(j)
+    db.session.commit()
+    return jsonify({'id': j.id, 'ok': True})
+
+@app.route('/api/jurnal/<int:jid>', methods=['DELETE'])
+@login_required
+def del_jurnal(jid):
+    if current_user.role != 'owner':
+        return jsonify({'error': 'Akses ditolak'}), 403
+    j = Jurnal.query.get_or_404(jid)
+    db.session.delete(j)
     db.session.commit()
     return jsonify({'ok': True})
 
