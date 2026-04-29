@@ -111,6 +111,7 @@ class Invoice(db.Model):
     jatuh_tempo = db.Column(db.String(50))
     status = db.Column(db.String(50), default='Belum Bayar')
     tanggal = db.Column(db.DateTime, default=datetime.now)
+    items = db.Column(db.Text, default='[]')
 
 def kirim_whatsapp(nomor, pesan):
     token = os.environ.get('FONNTE_TOKEN', '')
@@ -293,14 +294,27 @@ def add_transaksi():
 @login_required
 def get_invoice():
     invoices = Invoice.query.order_by(Invoice.tanggal.desc()).all()
-    return jsonify([{'id': i.id, 'nomor': i.nomor, 'pelanggan': i.pelanggan, 'produk': i.produk, 'jumlah': i.jumlah, 'harga': i.harga, 'total': i.total, 'jatuh_tempo': i.jatuh_tempo, 'status': i.status, 'tanggal': i.tanggal.strftime('%d/%m/%Y')} for i in invoices])
+    return jsonify([{'id': i.id, 'nomor': i.nomor, 'pelanggan': i.pelanggan, 'produk': i.produk, 'jumlah': i.jumlah, 'harga': i.harga, 'total': i.total, 'jatuh_tempo': i.jatuh_tempo, 'status': i.status, 'tanggal': i.tanggal.strftime('%d/%m/%Y'), 'items': json.loads(i.items or '[]')} for i in invoices])
 
 @app.route('/api/invoice', methods=['POST'])
 @login_required
 def add_invoice():
     b = request.json
     nomor = f"INV-{datetime.now().strftime('%Y%m%d')}-{Invoice.query.count()+1:03d}"
-    i = Invoice(nomor=nomor, pelanggan=b['pelanggan'], produk=b['produk'], jumlah=int(b['jumlah']), harga=int(b['harga']), total=int(b['jumlah'])*int(b['harga']), jatuh_tempo=b.get('jatuh_tempo', '-'))
+    items = b.get('items', [])
+    total = sum(item['jumlah'] * item['harga'] for item in items)
+    # Ambil nama produk pertama untuk kolom produk (backward compat)
+    produk_nama = items[0]['nama'] if items else b.get('produk', '')
+    i = Invoice(
+        nomor=nomor,
+        pelanggan=b['pelanggan'],
+        produk=produk_nama,
+        jumlah=len(items),
+        harga=total,
+        total=total,
+        items=json.dumps(items),
+        jatuh_tempo=b.get('jatuh_tempo', '-')
+    )
     db.session.add(i)
     db.session.commit()
     return jsonify({'id': i.id, 'nomor': i.nomor})
@@ -320,38 +334,116 @@ def cetak_invoice(iid):
     toko = Toko.query.first()
     nama_toko = toko.nama if toko else 'UMKM Pro'
     alamat_toko = toko.alamat if toko else ''
+    telepon_toko = toko.telepon if toko else ''
+    email_toko = toko.email if toko else ''
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=2*cm, leftMargin=2*cm, topMargin=2*cm, bottomMargin=2*cm)
+    doc = SimpleDocTemplate(buffer, pagesize=A4,
+        rightMargin=2*cm, leftMargin=2*cm,
+        topMargin=2*cm, bottomMargin=2*cm)
+    from reportlab.platypus import HRFlowable
     elemen = []
-    judul = ParagraphStyle('judul', fontSize=20, fontName='Helvetica-Bold', spaceAfter=4)
-    normal = ParagraphStyle('normal', fontSize=10, fontName='Helvetica', spaceAfter=4)
-    elemen.append(Paragraph(f'INVOICE — {nama_toko.upper()}', judul))
-    if alamat_toko:
-        elemen.append(Paragraph(alamat_toko, normal))
-    elemen.append(Paragraph(f'Nomor: {i.nomor}', normal))
-    elemen.append(Paragraph(f'Tanggal: {i.tanggal.strftime("%d/%m/%Y")}', normal))
-    elemen.append(Paragraph(f'Jatuh Tempo: {i.jatuh_tempo}', normal))
-    elemen.append(Spacer(1, 0.3*cm))
-    elemen.append(Paragraph(f'Kepada: {i.pelanggan}', normal))
+
+    # Styles
+    s_judul = ParagraphStyle('judul', fontSize=16, fontName='Helvetica-Bold', alignment=1, spaceAfter=16)
+    s_bold = ParagraphStyle('bold', fontSize=10, fontName='Helvetica-Bold', spaceAfter=2)
+    s_normal = ParagraphStyle('normal', fontSize=10, fontName='Helvetica', spaceAfter=2)
+    s_small = ParagraphStyle('small', fontSize=9, fontName='Helvetica', textColor=colors.HexColor('#444444'), spaceAfter=2)
+    s_kanan = ParagraphStyle('kanan', fontSize=10, fontName='Helvetica', alignment=2, spaceAfter=2)
+    s_kanan_bold = ParagraphStyle('kanan_bold', fontSize=12, fontName='Helvetica-Bold', alignment=2, spaceAfter=4)
+
+    # JUDUL
+    elemen.append(Paragraph('INVOICE', s_judul))
+    elemen.append(HRFlowable(width='100%', thickness=1, color=colors.black, spaceAfter=12))
+
+    # Header: Info toko kiri, Info invoice kanan
+    header_data = [[
+        Paragraph(f'<b>{nama_toko}</b>', s_bold),
+        Paragraph(f'No. {i.nomor}', s_normal)
+    ],[
+        Paragraph(alamat_toko, s_small),
+        Paragraph(f'Tanggal: {i.tanggal.strftime("%d/%m/%Y")}', s_normal)
+    ],[
+        Paragraph(f'Telp: {telepon_toko}' if telepon_toko else '', s_small),
+        Paragraph(f'Jatuh Tempo: {i.jatuh_tempo}', s_normal)
+    ],[
+        Paragraph(email_toko, s_small),
+        Paragraph('', s_normal)
+    ]]
+    header_tabel = Table(header_data, colWidths=[10*cm, 7*cm])
+    header_tabel.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('ALIGN', (1,0), (1,-1), 'RIGHT'),
+    ]))
+    elemen.append(header_tabel)
     elemen.append(Spacer(1, 0.5*cm))
-    data = [['Produk/Layanan', 'Jumlah', 'Harga Satuan', 'Total'],
-            [i.produk, str(i.jumlah), f"Rp {i.harga:,}", f"Rp {i.total:,}"],
-            ['', '', 'TOTAL', f"Rp {i.total:,}"]]
-    tabel = Table(data, colWidths=[8*cm, 2*cm, 4*cm, 4*cm])
+    elemen.append(HRFlowable(width='100%', thickness=0.5, color=colors.HexColor('#cccccc'), spaceAfter=10))
+
+    # Ditujukan kepada
+    elemen.append(Paragraph('<b>Ditujukan Kepada:</b>', s_bold))
+    elemen.append(Paragraph(i.pelanggan, s_normal))
+    elemen.append(Spacer(1, 0.6*cm))
+
+    # Tabel produk
+    data = [['No.', 'Deskripsi', 'Jumlah', 'Satuan', 'Harga Satuan', 'Total']]
+    items_list = json.loads(i.items or '[]')
+    if items_list:
+        for idx, item in enumerate(items_list):
+            subtotal = item['jumlah'] * item['harga']
+            data.append([str(idx+1), item['nama'], str(item['jumlah']), 'Unit', f"Rp {item['harga']:,}", f"Rp {subtotal:,}"])
+    else:
+        data.append(['1', i.produk, str(i.jumlah), 'Unit', f"Rp {i.harga:,}", f"Rp {i.total:,}"])
+    tabel = Table(data, colWidths=[1*cm, 6*cm, 2*cm, 2*cm, 3.5*cm, 3.5*cm])
     tabel.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#4f6ef7')),
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#4472C4')),
         ('TEXTCOLOR', (0,0), (-1,0), colors.white),
         ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-        ('ALIGN', (1,0), (-1,-1), 'CENTER'),
-        ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'),
-        ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor('#f0f0f0')),
-        ('GRID', (0,0), (-1,-2), 0.5, colors.grey),
-        ('LINEABOVE', (0,-1), (-1,-1), 1, colors.black),
+        ('FONTSIZE', (0,0), (-1,-1), 10),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('ALIGN', (1,0), (1,-1), 'LEFT'),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cccccc')),
+        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor('#f5f5f5')]),
+        ('TOPPADDING', (0,0), (-1,-1), 8),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+        ('LEFTPADDING', (0,0), (-1,-1), 8),
     ]))
     elemen.append(tabel)
+    elemen.append(Spacer(1, 0.3*cm))
+
+    # Total (rata kanan)
+    total_data = [
+        ['', 'Total:', f"Rp {i.total:,}"]
+    ]
+    total_tabel = Table(total_data, colWidths=[11*cm, 3*cm, 4*cm])
+    total_tabel.setStyle(TableStyle([
+        ('ALIGN', (1,0), (-1,-1), 'RIGHT'),
+        ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
+        ('FONTSIZE', (0,0), (-1,-1), 10),
+        ('TOPPADDING', (0,0), (-1,-1), 6),
+    ]))
+    elemen.append(total_tabel)
     elemen.append(Spacer(1, 0.5*cm))
-    elemen.append(Paragraph(f'Status: {i.status}', normal))
-    elemen.append(Paragraph(f'Dibuat oleh: {current_user.nama}', normal))
+    elemen.append(HRFlowable(width='100%', thickness=0.5, color=colors.HexColor('#cccccc'), spaceAfter=10))
+
+    # Keterangan
+    elemen.append(Paragraph('<b>Keterangan:</b>', s_bold))
+    status_text = 'Lunas' if i.status == 'Lunas' else 'Belum Bayar'
+    elemen.append(Paragraph(f'Status pembayaran: {status_text}', s_normal))
+    elemen.append(Spacer(1, 1.5*cm))
+
+    # Tanda tangan
+    ttd_data = [[
+        Paragraph('', s_normal),
+        Paragraph(f'( {current_user.nama} )', s_kanan_bold)
+    ],[
+        Paragraph('', s_normal),
+        Paragraph('Dibuat oleh', s_kanan)
+    ]]
+    ttd_tabel = Table(ttd_data, colWidths=[10*cm, 7*cm])
+    ttd_tabel.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
+    ]))
+    elemen.append(ttd_tabel)
+
     doc.build(elemen)
     buffer.seek(0)
     return send_file(buffer, mimetype='application/pdf', download_name=f'invoice-{i.nomor}.pdf')
