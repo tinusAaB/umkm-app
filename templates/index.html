@@ -5,7 +5,45 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>UMKM Pro</title>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js">
+// Auto-scroll dock on hover near edges - smooth & fast
+(function() {
+  var navWrap = document.querySelector('.nav-wrap');
+  var animFrame = null;
+  var scrollSpeed = 0;
+
+  function smoothScroll() {
+    if (scrollSpeed !== 0) {
+      navWrap.scrollLeft += scrollSpeed;
+      animFrame = requestAnimationFrame(smoothScroll);
+    }
+  }
+
+  navWrap.addEventListener('mousemove', function(e) {
+    var rect = navWrap.getBoundingClientRect();
+    var x = e.clientX - rect.left;
+    var width = rect.width;
+    var edgeZone = 80;
+
+    if (x < edgeZone) {
+      scrollSpeed = -Math.pow((edgeZone - x) / edgeZone, 1.5) * 18;
+    } else if (x > width - edgeZone) {
+      scrollSpeed = Math.pow((x - (width - edgeZone)) / edgeZone, 1.5) * 18;
+    } else {
+      scrollSpeed = 0;
+    }
+
+    cancelAnimationFrame(animFrame);
+    if (scrollSpeed !== 0) animFrame = requestAnimationFrame(smoothScroll);
+  });
+
+  navWrap.addEventListener('mouseleave', function() {
+    scrollSpeed = 0;
+    cancelAnimationFrame(animFrame);
+  });
+})();
+
+</script>
 <style>
 :root {
   --bg: #e8f0fe;
@@ -76,11 +114,11 @@ body { font-family: 'Nunito', sans-serif; background: linear-gradient(160deg, #1
 .card-title { font-size: 11px; font-weight: 800; color: var(--text3); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
 
 /* Welcome banner */
-.banner { border-radius: var(--radius); padding: 18px; color: white; position: relative; overflow: hidden; }
+.banner { border-radius: var(--radius); padding: 20px 20px; color: white; position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: center; min-height: 80px; }
 .banner::before { content: ''; position: absolute; top: -30px; right: -30px; width: 120px; height: 120px; background: rgba(255,255,255,0.1); border-radius: 50%; }
 .banner::after { content: ''; position: absolute; bottom: -20px; right: 30px; width: 80px; height: 80px; background: rgba(255,255,255,0.08); border-radius: 50%; }
-.banner-title { font-size: 17px; font-weight: 900; margin-bottom: 4px; position: relative; z-index: 1; }
-.banner-sub { font-size: 12px; opacity: 0.85; position: relative; z-index: 1; }
+.banner-title { font-size: 17px; font-weight: 900; margin-bottom: 4px; position: relative; z-index: 1; line-height: 1.3; }
+.banner-sub { font-size: 12px; opacity: 0.85; position: relative; z-index: 1; line-height: 1.4; }
 .banner-purple { background: linear-gradient(135deg, #7c3aed, #2563eb); }
 .banner-green { background: linear-gradient(135deg, #059669, #0891b2); }
 .banner-orange { background: linear-gradient(135deg, #ea580c, #d97706); }
@@ -171,6 +209,76 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px;
 
 /* Stok badge */
 #stok-badge { background: var(--red); color: white; border-radius: 100px; font-size: 10px; font-weight: 800; padding: 1px 6px; margin-left: 2px; }
+
+/* Animasi */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+}
+.animate-up { animation: fadeInUp 0.4s ease both; }
+.animate-fade { animation: fadeIn 0.3s ease both; }
+.card { animation: fadeInUp 0.4s ease both; }
+.card:nth-child(1) { animation-delay: 0.05s; }
+.card:nth-child(2) { animation-delay: 0.1s; }
+.card:nth-child(3) { animation-delay: 0.15s; }
+.card:nth-child(4) { animation-delay: 0.2s; }
+.metric { animation: fadeInUp 0.4s ease both; transition: transform 0.2s, box-shadow 0.2s; }
+.metric:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(37,99,235,0.18); }
+.metric:nth-child(1) { animation-delay: 0.05s; }
+.metric:nth-child(2) { animation-delay: 0.1s; }
+.metric:nth-child(3) { animation-delay: 0.15s; }
+.metric:nth-child(4) { animation-delay: 0.2s; }
+.banner { animation: fadeInUp 0.35s ease both; }
+.list-item { animation: slideInLeft 0.3s ease both; transition: background 0.15s; }
+.list-item:hover { background: rgba(37,99,235,0.04); border-radius: 8px; }
+.btn { transition: all 0.2s; }
+.btn:active { transform: scale(0.97); }
+.nav-btn { transition: all 0.2s; }
+.nav-btn:hover { transform: translateY(-1px); }
+.page.active > * { animation: fadeInUp 0.35s ease both; }
+.page.active > *:nth-child(1) { animation-delay: 0.0s; }
+.page.active > *:nth-child(2) { animation-delay: 0.07s; }
+.page.active > *:nth-child(3) { animation-delay: 0.14s; }
+.page.active > *:nth-child(4) { animation-delay: 0.21s; }
+.page.active > *:nth-child(5) { animation-delay: 0.28s; }
+
+/* Dock Magnification Effect */
+.nav {
+  display: flex;
+  gap: 6px;
+  width: max-content;
+  align-items: flex-end;
+  padding-bottom: 4px;
+}
+.nav-btn {
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), font-size 0.2s ease;
+  transform-origin: top center;
+  display: inline-flex;
+  align-items: center;
+}
+.nav-btn:hover {
+  transform: scale(1.25) translateY(4px);
+  z-index: 10;
+  position: relative;
+}
+.nav-btn:hover + .nav-btn {
+  transform: scale(1.12) translateY(2px);
+}
+.nav-btn:has(+ .nav-btn:hover) {
+  transform: scale(1.12) translateY(2px);
+}
 </style>
 </head>
 <body>
@@ -996,6 +1104,44 @@ loadDashboard();
 loadWelcome();
 loadProdukSelect();
 cekStokAlert();
+
+// Auto-scroll dock on hover near edges - smooth & fast
+(function() {
+  var navWrap = document.querySelector('.nav-wrap');
+  var animFrame = null;
+  var scrollSpeed = 0;
+
+  function smoothScroll() {
+    if (scrollSpeed !== 0) {
+      navWrap.scrollLeft += scrollSpeed;
+      animFrame = requestAnimationFrame(smoothScroll);
+    }
+  }
+
+  navWrap.addEventListener('mousemove', function(e) {
+    var rect = navWrap.getBoundingClientRect();
+    var x = e.clientX - rect.left;
+    var width = rect.width;
+    var edgeZone = 80;
+
+    if (x < edgeZone) {
+      scrollSpeed = -Math.pow((edgeZone - x) / edgeZone, 1.5) * 18;
+    } else if (x > width - edgeZone) {
+      scrollSpeed = Math.pow((x - (width - edgeZone)) / edgeZone, 1.5) * 18;
+    } else {
+      scrollSpeed = 0;
+    }
+
+    cancelAnimationFrame(animFrame);
+    if (scrollSpeed !== 0) animFrame = requestAnimationFrame(smoothScroll);
+  });
+
+  navWrap.addEventListener('mouseleave', function() {
+    scrollSpeed = 0;
+    cancelAnimationFrame(animFrame);
+  });
+})();
+
 </script>
 </body>
 </html>

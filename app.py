@@ -457,44 +457,110 @@ def cetak_struk(tid):
     nama_toko = toko.nama if toko else 'UMKM Pro'
     alamat_toko = toko.alamat if toko else ''
     telepon_toko = toko.telepon if toko else ''
+    email_toko = toko.email if toko else ''
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=2*cm, leftMargin=2*cm, topMargin=2*cm, bottomMargin=2*cm)
+    doc = SimpleDocTemplate(buffer, pagesize=A4,
+        rightMargin=2*cm, leftMargin=2*cm,
+        topMargin=2*cm, bottomMargin=2*cm)
+    from reportlab.platypus import HRFlowable
     elemen = []
-    judul = ParagraphStyle('judul', fontSize=16, fontName='Helvetica-Bold', alignment=1, spaceAfter=4)
-    sub = ParagraphStyle('sub', fontSize=10, fontName='Helvetica', alignment=1, spaceAfter=2)
-    elemen.append(Paragraph(nama_toko.upper(), judul))
-    if alamat_toko:
-        elemen.append(Paragraph(alamat_toko, sub))
-    if telepon_toko:
-        elemen.append(Paragraph(f'Telp: {telepon_toko}', sub))
-    elemen.append(Paragraph('Struk Pembelian', sub))
-    elemen.append(Paragraph(f'No: TRX-{t.id:04d}', sub))
-    elemen.append(Paragraph(f'Tanggal: {t.tanggal.strftime("%d/%m/%Y %H:%M")}', sub))
-    elemen.append(Paragraph(f'Pelanggan: {t.pelanggan}', sub))
-    elemen.append(Paragraph(f'Kasir: {t.kasir}', sub))
-    elemen.append(Spacer(1, 0.3*cm))
-    data = [['Produk', 'Qty', 'Harga', 'Subtotal']]
-    for item in items:
+
+    # Styles
+    s_judul = ParagraphStyle('judul', fontSize=16, fontName='Helvetica-Bold', alignment=1, spaceAfter=16)
+    s_bold = ParagraphStyle('bold', fontSize=10, fontName='Helvetica-Bold', spaceAfter=2)
+    s_normal = ParagraphStyle('normal', fontSize=10, fontName='Helvetica', spaceAfter=2)
+    s_small = ParagraphStyle('small', fontSize=9, fontName='Helvetica', textColor=colors.HexColor('#666666'), spaceAfter=1)
+    s_kanan = ParagraphStyle('kanan', fontSize=10, fontName='Helvetica', alignment=2, spaceAfter=2)
+    s_kanan_bold = ParagraphStyle('kanan_bold', fontSize=12, fontName='Helvetica-Bold', alignment=2, spaceAfter=4)
+
+    # JUDUL
+    elemen.append(Paragraph('STRUK PEMBELIAN', s_judul))
+    elemen.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#1e3a8a'), spaceAfter=12))
+
+    # Header: Info toko kiri, Info transaksi kanan
+    header_data = [[
+        Paragraph(f'<b>{nama_toko}</b>', s_bold),
+        Paragraph(f'No. TRX-{t.id:04d}', s_normal)
+    ],[
+        Paragraph(alamat_toko, s_small) if alamat_toko else Paragraph('', s_small),
+        Paragraph(f'Tanggal: {t.tanggal.strftime("%d/%m/%Y %H:%M")}', s_normal)
+    ],[
+        Paragraph(f'Telp: {telepon_toko}', s_small) if telepon_toko else Paragraph('', s_small),
+        Paragraph(f'Kasir: {t.kasir}', s_normal)
+    ],[
+        Paragraph(email_toko, s_small) if email_toko else Paragraph('', s_small),
+        Paragraph('', s_normal)
+    ]]
+    header_tabel = Table(header_data, colWidths=[10*cm, 7*cm])
+    header_tabel.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('ALIGN', (1,0), (1,-1), 'RIGHT'),
+    ]))
+    elemen.append(header_tabel)
+    elemen.append(Spacer(1, 0.5*cm))
+    elemen.append(HRFlowable(width='100%', thickness=0.5, color=colors.HexColor('#cccccc'), spaceAfter=10))
+
+    # Info pelanggan
+    pelanggan_data = [[
+        Paragraph('PELANGGAN:', s_small),
+        Paragraph('', s_small)
+    ],[
+        Paragraph(t.pelanggan, s_bold),
+        Paragraph('', s_normal)
+    ]]
+    pelanggan_tabel = Table(pelanggan_data, colWidths=[12*cm, 4*cm])
+    pelanggan_tabel.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'TOP')]))
+    elemen.append(pelanggan_tabel)
+    elemen.append(Spacer(1, 0.5*cm))
+
+    # Tabel produk
+    data = [['No.', 'Produk', 'Qty', 'Harga Satuan', 'Total']]
+    for idx, item in enumerate(items):
         p = Produk.query.get(item['id'])
         if p:
             subtotal = p.harga * item['qty']
-            data.append([p.nama, str(item['qty']), f"Rp {p.harga:,}", f"Rp {subtotal:,}"])
-    data.append(['', '', 'TOTAL', f"Rp {t.total:,}"])
-    tabel = Table(data, colWidths=[8*cm, 2*cm, 4*cm, 4*cm])
+            data.append([str(idx+1), p.nama, str(item['qty']), f"Rp {p.harga:,}", f"Rp {subtotal:,}"])
+    tabel = Table(data, colWidths=[1*cm, 7*cm, 2*cm, 3.5*cm, 3.5*cm])
     tabel.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#4f6ef7')),
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1e3a8a')),
         ('TEXTCOLOR', (0,0), (-1,0), colors.white),
         ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-        ('ALIGN', (1,0), (-1,-1), 'CENTER'),
-        ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'),
-        ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor('#f0f0f0')),
-        ('GRID', (0,0), (-1,-2), 0.5, colors.grey),
-        ('LINEABOVE', (0,-1), (-1,-1), 1, colors.black),
-        ('ROWBACKGROUNDS', (0,1), (-1,-2), [colors.white, colors.HexColor('#f9f9f9')]),
+        ('FONTSIZE', (0,0), (-1,-1), 10),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('ALIGN', (1,0), (1,-1), 'LEFT'),
+        ('ALIGN', (3,0), (-1,-1), 'RIGHT'),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
+        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor('#f8faff')]),
+        ('TOPPADDING', (0,0), (-1,-1), 8),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+        ('LEFTPADDING', (0,0), (-1,-1), 8),
     ]))
     elemen.append(tabel)
-    elemen.append(Spacer(1, 0.5*cm))
-    elemen.append(Paragraph('Terima kasih telah berbelanja!', ParagraphStyle('thanks', fontSize=10, fontName='Helvetica-Bold', alignment=1)))
+    elemen.append(Spacer(1, 0.3*cm))
+
+    # Total
+    total_data = [['', 'TOTAL:', f"Rp {t.total:,}"]]
+    total_tabel = Table(total_data, colWidths=[10*cm, 3*cm, 4*cm])
+    total_tabel.setStyle(TableStyle([
+        ('ALIGN', (1,0), (-1,-1), 'RIGHT'),
+        ('FONTNAME', (0,0), (-1,-1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,-1), 11),
+        ('TOPPADDING', (0,0), (-1,-1), 6),
+        ('LINEABOVE', (0,0), (-1,0), 1.5, colors.HexColor('#1e3a8a')),
+    ]))
+    elemen.append(total_tabel)
+    elemen.append(Spacer(1, 0.8*cm))
+    elemen.append(HRFlowable(width='100%', thickness=0.5, color=colors.HexColor('#e2e8f0'), spaceAfter=8))
+
+    # Footer
+    footer_data = [[
+        Paragraph('Terima kasih telah berbelanja!', s_small),
+        Paragraph(f'{nama_toko} · {alamat_toko}', ParagraphStyle('footer', fontSize=8, fontName='Helvetica', textColor=colors.HexColor('#999999'), alignment=2))
+    ]]
+    footer_tabel = Table(footer_data, colWidths=[8*cm, 9*cm])
+    footer_tabel.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'TOP')]))
+    elemen.append(footer_tabel)
+
     doc.build(elemen)
     buffer.seek(0)
     return send_file(buffer, mimetype='application/pdf', download_name=f'struk-{t.id}.pdf')
