@@ -82,6 +82,8 @@ class Transaksi(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     pelanggan = db.Column(db.String(200), default='Umum')
     kasir = db.Column(db.String(100), default='Kasir')
+    subtotal = db.Column(db.Integer, default=0)
+    ppn = db.Column(db.Integer, default=0)
     total = db.Column(db.Integer, nullable=False)
     items = db.Column(db.Text)
     tanggal = db.Column(db.DateTime, default=datetime.now)
@@ -250,12 +252,16 @@ def add_transaksi():
         if p:
             p.stok = max(0, p.stok - item['qty'])
             total += p.harga * item['qty']
+    ppn = round(total * 0.10)
+    total_ppn = total + ppn
     t = Transaksi(
-    pelanggan=b.get('pelanggan', 'Umum'),
-    kasir=current_user.nama or current_user.username,
-    total=total,
-    items=json.dumps(items)
-)
+        pelanggan=b.get('pelanggan', 'Umum'),
+        kasir=current_user.nama or current_user.username,
+        subtotal=total,
+        ppn=ppn,
+        total=total_ppn,
+        items=json.dumps(items)
+    )
     db.session.add(t)
     db.session.commit()
     nomor = b.get('nomor_wa', '')
@@ -410,8 +416,14 @@ def cetak_invoice(iid):
     elemen.append(Spacer(1, 0.3*cm))
 
     # Total (rata kanan)
+    items_list_total = json.loads(i.items or "[]")
+    subtotal_inv = sum(item["jumlah"] * item["harga"] for item in items_list_total) if items_list_total else i.harga
+    ppn_inv = round(subtotal_inv * 0.10)
+    total_inv = subtotal_inv + ppn_inv
     total_data = [
-        ['', 'Total:', f"Rp {i.total:,}"]
+        ['', 'Subtotal:', f"Rp {subtotal_inv:,}"],
+        ['', 'PPN 10%:', f"Rp {ppn_inv:,}"],
+        ['', 'Total:', f"Rp {total_inv:,}"],
     ]
     total_tabel = Table(total_data, colWidths=[11*cm, 3*cm, 4*cm])
     total_tabel.setStyle(TableStyle([
@@ -539,7 +551,13 @@ def cetak_struk(tid):
     elemen.append(Spacer(1, 0.3*cm))
 
     # Total
-    total_data = [['', 'TOTAL:', f"Rp {t.total:,}"]]
+    subtotal = t.subtotal if t.subtotal else t.total
+    ppn = t.ppn if t.ppn else 0
+    total_data = [
+        ['', 'Subtotal:', f"Rp {subtotal:,}"],
+        ['', 'PPN 10%:', f"Rp {ppn:,}"],
+        ['', 'TOTAL:', f"Rp {t.total:,}"]
+    ]
     total_tabel = Table(total_data, colWidths=[10*cm, 3*cm, 4*cm])
     total_tabel.setStyle(TableStyle([
         ('ALIGN', (1,0), (-1,-1), 'RIGHT'),
