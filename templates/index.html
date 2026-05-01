@@ -641,7 +641,16 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px;
       <div class="field"><label>Nomor Telepon</label><input id="st-telepon" placeholder="08123456789" /></div>
       <div class="field"><label>Email</label><input id="st-email" placeholder="toko@email.com" /></div>
       <div class="field"><label>Tagline</label><input id="st-tagline" placeholder="Belanja Mudah, Harga Hemat" /></div>
-      <button class="btn btn-purple" onclick="simpanSettings()">Simpan Pengaturan</button>
+      <div class="field"><label>PPN (%)</label>
+        <select id="st-ppn">
+          <option value="0">0% (Tidak ada PPN)</option>
+          <option value="5">5%</option>
+          <option value="10">10%</option>
+          <option value="11">11%</option>
+          <option value="12">12%</option>
+        </select>
+      </div>
+      <button class="btn btn-purple" onclick="simpanSettings()">💾 Simpan Pengaturan</button>
     </div>
   </div>
 </div>
@@ -1087,6 +1096,7 @@ async function loadSettings() {
   document.getElementById('st-telepon').value = d.telepon || '';
   document.getElementById('st-email').value = d.email || '';
   document.getElementById('st-tagline').value = d.tagline || '';
+  document.getElementById('st-ppn').value = d.ppn_persen || 10;
 }
 
 async function simpanSettings() {
@@ -1096,7 +1106,8 @@ async function simpanSettings() {
   var email = document.getElementById('st-email').value;
   var tagline = document.getElementById('st-tagline').value;
   if (!nama) { toast('Nama toko wajib diisi!'); return; }
-  var res = await api('/api/toko', 'POST', {nama, alamat, telepon, email, tagline});
+  var ppn_persen = document.getElementById('st-ppn').value;
+  var res = await api('/api/toko', 'POST', {nama, alamat, telepon, email, tagline, ppn_persen: ppn_persen});
   if (res.ok) { toast('Pengaturan berhasil disimpan! ✓'); }
 }
 

@@ -53,6 +53,7 @@ class Toko(db.Model):
     email = db.Column(db.String(100), default='')
     tagline = db.Column(db.String(200), default='')
     dibuat = db.Column(db.DateTime, default=datetime.now)
+    ppn_persen = db.Column(db.Integer, default=10)
 
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
@@ -192,7 +193,7 @@ def get_toko():
         toko = Toko()
         db.session.add(toko)
         db.session.commit()
-    return jsonify({'nama': toko.nama, 'alamat': toko.alamat, 'telepon': toko.telepon, 'email': toko.email, 'tagline': toko.tagline})
+    return jsonify({'nama': toko.nama, 'alamat': toko.alamat, 'telepon': toko.telepon, 'email': toko.email, 'tagline': toko.tagline, 'ppn_persen': toko.ppn_persen or 10})
 
 @app.route('/api/toko', methods=['POST'])
 @login_required
@@ -209,6 +210,7 @@ def update_toko():
     toko.telepon = b.get('telepon', toko.telepon)
     toko.email = b.get('email', toko.email)
     toko.tagline = b.get('tagline', toko.tagline)
+    toko.ppn_persen = int(b.get('ppn_persen', toko.ppn_persen or 10))
     db.session.commit()
     return jsonify({'ok': True})
 
@@ -252,7 +254,9 @@ def add_transaksi():
         if p:
             p.stok = max(0, p.stok - item['qty'])
             total += p.harga * item['qty']
-    ppn = round(total * 0.10)
+    toko = Toko.query.first()
+    ppn_persen = toko.ppn_persen if toko and toko.ppn_persen is not None else 10
+    ppn = round(total * ppn_persen / 100)
     total_ppn = total + ppn
     t = Transaksi(
         pelanggan=b.get('pelanggan', 'Umum'),
@@ -418,11 +422,13 @@ def cetak_invoice(iid):
     # Total (rata kanan)
     items_list_total = json.loads(i.items or "[]")
     subtotal_inv = sum(item["jumlah"] * item["harga"] for item in items_list_total) if items_list_total else i.harga
-    ppn_inv = round(subtotal_inv * 0.10)
+    toko_ppn = Toko.query.first()
+    ppn_persen_inv = toko_ppn.ppn_persen if toko_ppn and toko_ppn.ppn_persen is not None else 10
+    ppn_inv = round(subtotal_inv * ppn_persen_inv / 100)
     total_inv = subtotal_inv + ppn_inv
     total_data = [
         ['', 'Subtotal:', f"Rp {subtotal_inv:,}"],
-        ['', 'PPN 10%:', f"Rp {ppn_inv:,}"],
+        ['', f'PPN {ppn_persen_inv}%:', f"Rp {ppn_inv:,}"],
         ['', 'Total:', f"Rp {total_inv:,}"],
     ]
     total_tabel = Table(total_data, colWidths=[11*cm, 3*cm, 4*cm])
@@ -552,10 +558,12 @@ def cetak_struk(tid):
 
     # Total
     subtotal = t.subtotal if t.subtotal else t.total
+    toko_data = Toko.query.first()
+    ppn_persen = toko_data.ppn_persen if toko_data and toko_data.ppn_persen is not None else 10
     ppn = t.ppn if t.ppn else 0
     total_data = [
         ['', 'Subtotal:', f"Rp {subtotal:,}"],
-        ['', 'PPN 10%:', f"Rp {ppn:,}"],
+        ['', f'PPN {ppn_persen}%:', f"Rp {ppn:,}"],
         ['', 'TOTAL:', f"Rp {t.total:,}"]
     ]
     total_tabel = Table(total_data, colWidths=[10*cm, 3*cm, 4*cm])
