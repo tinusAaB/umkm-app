@@ -131,6 +131,10 @@ def kirim_whatsapp(nomor, pesan):
         print(f"WhatsApp error: {str(e)}")
         return False
 
+@app.route('/privacy')
+def privacy():
+    return render_template('privacy.html')
+
 @app.route('/setup', methods=['GET', 'POST'])
 def setup():
     if User.query.filter_by(role='owner').count() > 0:
