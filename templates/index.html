@@ -499,6 +499,17 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px;
       <div id="chart-harian-empty" class="empty" style="display:none;"><div class="empty-icon">📊</div>Belum ada data</div>
     </div>
     <div class="card">
+  <div class="card-title">Export Laporan</div>
+  <div style="display:flex;gap:8px;">
+    <a href="/api/export/excel" target="_blank" style="flex:1;">
+      <button class="btn btn-green" style="width:100%;">📊 Export Excel</button>
+    </a>
+    <a href="/api/export/pdf" target="_blank" style="flex:1;">
+      <button class="btn btn-purple" style="width:100%;">📄 Export PDF</button>
+    </a>
+  </div>
+</div>
+    <div class="card">
       <div class="card-title">🏆 Produk terlaris</div>
       <div id="lap-terlaris"><div class="empty"><div class="empty-icon">🏆</div>Belum ada data</div></div>
     </div>

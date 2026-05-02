@@ -710,6 +710,192 @@ def neraca():
         'invoice_lunas': invoice_lunas, 'total_transaksi': len(transaksi),
     })
 
+@app.route('/api/export/excel')
+@login_required
+def export_excel():
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+    import io
+
+    wb = Workbook()
+    
+    # Sheet 1: Transaksi
+    ws1 = wb.active
+    ws1.title = 'Transaksi'
+    header_fill = PatternFill(start_color='1e3a8a', end_color='1e3a8a', fill_type='solid')
+    header_font = Font(color='FFFFFF', bold=True)
+    
+    headers = ['No', 'Tanggal', 'Pelanggan', 'Kasir', 'Subtotal', 'PPN', 'Total']
+    for col, h in enumerate(headers, 1):
+        cell = ws1.cell(row=1, column=col, value=h)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center')
+    
+    transaksi = Transaksi.query.order_by(Transaksi.tanggal.desc()).all()
+    for row, t in enumerate(transaksi, 2):
+        ws1.cell(row=row, column=1, value=row-1)
+        ws1.cell(row=row, column=2, value=t.tanggal.strftime('%d/%m/%Y %H:%M'))
+        ws1.cell(row=row, column=3, value=t.pelanggan)
+        ws1.cell(row=row, column=4, value=t.kasir)
+        ws1.cell(row=row, column=5, value=t.subtotal or t.total)
+        ws1.cell(row=row, column=6, value=t.ppn or 0)
+        ws1.cell(row=row, column=7, value=t.total)
+    
+    # Auto width
+    for col in range(1, 8):
+        ws1.column_dimensions[get_column_letter(col)].width = 18
+
+    # Sheet 2: Invoice
+    ws2 = wb.create_sheet('Invoice')
+    headers2 = ['No', 'Nomor', 'Tanggal', 'Pelanggan', 'Total', 'Status']
+    for col, h in enumerate(headers2, 1):
+        cell = ws2.cell(row=1, column=col, value=h)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center')
+    
+    invoices = Invoice.query.order_by(Invoice.tanggal.desc()).all()
+    for row, i in enumerate(invoices, 2):
+        ws2.cell(row=row, column=1, value=row-1)
+        ws2.cell(row=row, column=2, value=i.nomor)
+        ws2.cell(row=row, column=3, value=i.tanggal.strftime('%d/%m/%Y'))
+        ws2.cell(row=row, column=4, value=i.pelanggan)
+        ws2.cell(row=row, column=5, value=i.total)
+        ws2.cell(row=row, column=6, value=i.status)
+    
+    for col in range(1, 7):
+        ws2.column_dimensions[get_column_letter(col)].width = 18
+
+    # Sheet 3: Produk
+    ws3 = wb.create_sheet('Produk')
+    headers3 = ['No', 'Nama Produk', 'Kategori', 'Harga Jual', 'Modal', 'Stok', 'Nilai Stok']
+    for col, h in enumerate(headers3, 1):
+        cell = ws3.cell(row=1, column=col, value=h)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center')
+    
+    produk = Produk.query.order_by(Produk.nama).all()
+    for row, p in enumerate(produk, 2):
+        ws3.cell(row=row, column=1, value=row-1)
+        ws3.cell(row=row, column=2, value=p.nama)
+        ws3.cell(row=row, column=3, value=p.kategori or 'Umum')
+        ws3.cell(row=row, column=4, value=p.harga)
+        ws3.cell(row=row, column=5, value=p.modal)
+        ws3.cell(row=row, column=6, value=p.stok)
+        ws3.cell(row=row, column=7, value=p.modal * p.stok)
+    
+    for col in range(1, 8):
+        ws3.column_dimensions[get_column_letter(col)].width = 18
+
+    # Sheet 4: Jurnal
+    ws4 = wb.create_sheet('Jurnal')
+    headers4 = ['No', 'Tanggal', 'Keterangan', 'Kategori', 'Jenis', 'Debit', 'Kredit', 'Dibuat Oleh']
+    for col, h in enumerate(headers4, 1):
+        cell = ws4.cell(row=1, column=col, value=h)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center')
+    
+    jurnal = Jurnal.query.order_by(Jurnal.tanggal.desc()).all()
+    for row, j in enumerate(jurnal, 2):
+        ws4.cell(row=row, column=1, value=row-1)
+        ws4.cell(row=row, column=2, value=j.tanggal.strftime('%d/%m/%Y %H:%M'))
+        ws4.cell(row=row, column=3, value=j.keterangan)
+        ws4.cell(row=row, column=4, value=j.kategori)
+        ws4.cell(row=row, column=5, value=j.jenis)
+        ws4.cell(row=row, column=6, value=j.debit)
+        ws4.cell(row=row, column=7, value=j.kredit)
+        ws4.cell(row=row, column=8, value=j.dibuat_oleh)
+    
+    for col in range(1, 9):
+        ws4.column_dimensions[get_column_letter(col)].width = 18
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return send_file(buffer, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', download_name='laporan-umkm-pro.xlsx')
+
+@app.route('/api/export/pdf')
+@login_required
+def export_pdf():
+    from reportlab.platypus import HRFlowable
+    toko = Toko.query.first()
+    nama_toko = toko.nama if toko else 'UMKM Pro'
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4,
+        rightMargin=2*cm, leftMargin=2*cm,
+        topMargin=2*cm, bottomMargin=2*cm)
+    elemen = []
+    
+    s_judul = ParagraphStyle('judul', fontSize=16, fontName='Helvetica-Bold', alignment=1, spaceAfter=8)
+    s_sub = ParagraphStyle('sub', fontSize=10, fontName='Helvetica', alignment=1, textColor=colors.HexColor('#666666'), spaceAfter=16)
+    s_section = ParagraphStyle('section', fontSize=12, fontName='Helvetica-Bold', spaceAfter=8, textColor=colors.HexColor('#1e3a8a'))
+    s_normal = ParagraphStyle('normal', fontSize=9, fontName='Helvetica', spaceAfter=4)
+
+    elemen.append(Paragraph(f'LAPORAN KEUANGAN', s_judul))
+    elemen.append(Paragraph(f'{nama_toko}', s_sub))
+    elemen.append(Paragraph(f'Dicetak: {datetime.now().strftime("%d/%m/%Y %H:%M")}', s_sub))
+    elemen.append(HRFlowable(width='100%', thickness=1.5, color=colors.HexColor('#1e3a8a'), spaceAfter=12))
+
+    # Ringkasan
+    total_pendapatan = db.session.query(db.func.sum(Transaksi.total)).scalar() or 0
+    total_transaksi = Transaksi.query.count()
+    total_invoice = Invoice.query.count()
+    invoice_lunas = Invoice.query.filter_by(status='Lunas').count()
+
+    elemen.append(Paragraph('RINGKASAN KEUANGAN', s_section))
+    ringkasan = [
+        ['Keterangan', 'Nilai'],
+        ['Total Pendapatan', f'Rp {total_pendapatan:,}'],
+        ['Total Transaksi', str(total_transaksi)],
+        ['Total Invoice', str(total_invoice)],
+        ['Invoice Lunas', str(invoice_lunas)],
+        ['Invoice Belum Bayar', str(total_invoice - invoice_lunas)],
+    ]
+    t_ringkasan = Table(ringkasan, colWidths=[10*cm, 7*cm])
+    t_ringkasan.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1e3a8a')),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,-1), 9),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
+        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor('#f0f4ff')]),
+        ('TOPPADDING', (0,0), (-1,-1), 6),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ('LEFTPADDING', (0,0), (-1,-1), 8),
+    ]))
+    elemen.append(t_ringkasan)
+    elemen.append(Spacer(1, 0.5*cm))
+
+    # Transaksi terakhir
+    elemen.append(Paragraph('TRANSAKSI TERAKHIR (20 Data)', s_section))
+    trx_data = [['No', 'Tanggal', 'Pelanggan', 'Kasir', 'Total']]
+    transaksi = Transaksi.query.order_by(Transaksi.tanggal.desc()).limit(20).all()
+    for idx, t in enumerate(transaksi, 1):
+        trx_data.append([str(idx), t.tanggal.strftime('%d/%m/%Y'), t.pelanggan, t.kasir or '', f'Rp {t.total:,}'])
+    
+    t_trx = Table(trx_data, colWidths=[1*cm, 3.5*cm, 4*cm, 4*cm, 4.5*cm])
+    t_trx.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1e3a8a')),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,-1), 8),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('ALIGN', (2,0), (3,-1), 'LEFT'),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
+        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor('#f0f4ff')]),
+        ('TOPPADDING', (0,0), (-1,-1), 5),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+    ]))
+    elemen.append(t_trx)
+
+    doc.build(elemen)
+    buffer.seek(0)
+    return send_file(buffer, mimetype='application/pdf', download_name='laporan-umkm-pro.pdf')
+
 @app.route('/api/dashboard', methods=['GET'])
 @login_required
 def dashboard():
