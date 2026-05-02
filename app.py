@@ -52,8 +52,10 @@ class Toko(db.Model):
     telepon = db.Column(db.String(50), default='')
     email = db.Column(db.String(100), default='')
     tagline = db.Column(db.String(200), default='')
-    dibuat = db.Column(db.DateTime, default=datetime.now)
     ppn_persen = db.Column(db.Integer, default=10)
+    dibuat = db.Column(db.DateTime, default=datetime.now)
+    fonnte_token = db.Column(db.String(200), default='')
+    
 
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
@@ -117,8 +119,11 @@ class Invoice(db.Model):
     items = db.Column(db.Text, default='[]')
 
 def kirim_whatsapp(nomor, pesan):
-    token = os.environ.get('FONNTE_TOKEN', '')
+    # Cek token dari database toko dulu, kalau tidak ada pakai env variable
+    toko = Toko.query.first()
+    token = (toko.fonnte_token if toko and toko.fonnte_token else '') or os.environ.get('FONNTE_TOKEN', '')
     if not token:
+        print("FONNTE_TOKEN tidak ditemukan")
         return False
     try:
         response = req.post('https://api.fonnte.com/send',
@@ -197,7 +202,7 @@ def get_toko():
         toko = Toko()
         db.session.add(toko)
         db.session.commit()
-    return jsonify({'nama': toko.nama, 'alamat': toko.alamat, 'telepon': toko.telepon, 'email': toko.email, 'tagline': toko.tagline, 'ppn_persen': toko.ppn_persen or 10})
+    return jsonify({'nama': toko.nama, 'alamat': toko.alamat, 'telepon': toko.telepon, 'email': toko.email, 'tagline': toko.tagline, 'ppn_persen': toko.ppn_persen or 10, 'fonnte_token': toko.fonnte_token or ''})
 
 @app.route('/api/toko', methods=['POST'])
 @login_required
@@ -215,6 +220,7 @@ def update_toko():
     toko.email = b.get('email', toko.email)
     toko.tagline = b.get('tagline', toko.tagline)
     toko.ppn_persen = int(b.get('ppn_persen', toko.ppn_persen or 10))
+    toko.fonnte_token = b.get('fonnte_token', toko.fonnte_token or '')
     db.session.commit()
     return jsonify({'ok': True})
 
@@ -276,15 +282,22 @@ def add_transaksi():
     if nomor:
         toko = Toko.query.first()
         nama_toko = toko.nama if toko else 'UMKM Pro'
+        toko_ppn = Toko.query.first()
+        ppn_persen_wa = toko_ppn.ppn_persen if toko_ppn and toko_ppn.ppn_persen is not None else 10
+        ppn_wa = round(total * ppn_persen_wa / 100)
+        total_ppn_wa = total + ppn_wa
         pesan = f"✅ *Struk Pembelian {nama_toko}*\n\n"
         pesan += f"No: TRX-{t.id:04d}\n"
         pesan += f"Pelanggan: {t.pelanggan}\n"
+        pesan += f"Kasir: {t.kasir}\n"
         pesan += f"Tanggal: {t.tanggal.strftime('%d/%m/%Y %H:%M')}\n\n"
         for item in items:
             p = Produk.query.get(item['id'])
             if p:
                 pesan += f"- {p.nama} x{item['qty']} = Rp {p.harga * item['qty']:,}\n"
-        pesan += f"\n*Total: Rp {total:,}*\n\n"
+        pesan += f"\nSubtotal: Rp {total:,}\n"
+        pesan += f"PPN {ppn_persen_wa}%: Rp {ppn_wa:,}\n"
+        pesan += f"*Total: Rp {total_ppn_wa:,}*\n\n"
         pesan += "Terima kasih telah berbelanja! 🙏"
         kirim_whatsapp(nomor, pesan)
     try:

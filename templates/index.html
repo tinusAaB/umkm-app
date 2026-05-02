@@ -652,6 +652,10 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px;
       <div class="field"><label>Nomor Telepon</label><input id="st-telepon" placeholder="08123456789" /></div>
       <div class="field"><label>Email</label><input id="st-email" placeholder="toko@email.com" /></div>
       <div class="field"><label>Tagline</label><input id="st-tagline" placeholder="Belanja Mudah, Harga Hemat" /></div>
+      <div class="field"><label>Token WhatsApp (Fonnte)</label>
+        <input id="st-fonnte" placeholder="Token dari fonnte.com" type="password" />
+        <div style="font-size:11px;color:var(--text3);margin-top:4px;">Daftar di <a href="https://fonnte.com" target="_blank">fonnte.com</a> untuk dapat token WA Anda sendiri</div>
+      </div>
       <div class="field"><label>PPN (%)</label>
         <select id="st-ppn">
           <option value="0">0% (Tidak ada PPN)</option>
@@ -1108,6 +1112,7 @@ async function loadSettings() {
   document.getElementById('st-email').value = d.email || '';
   document.getElementById('st-tagline').value = d.tagline || '';
   document.getElementById('st-ppn').value = d.ppn_persen || 10;
+  document.getElementById('st-fonnte').value = d.fonnte_token || '';
 }
 
 async function simpanSettings() {
@@ -1118,7 +1123,8 @@ async function simpanSettings() {
   var tagline = document.getElementById('st-tagline').value;
   if (!nama) { toast('Nama toko wajib diisi!'); return; }
   var ppn_persen = document.getElementById('st-ppn').value;
-  var res = await api('/api/toko', 'POST', {nama, alamat, telepon, email, tagline, ppn_persen: ppn_persen});
+  var fonnte_token = document.getElementById('st-fonnte').value;
+  var res = await api('/api/toko', 'POST', {nama, alamat, telepon, email, tagline, ppn_persen: ppn_persen, fonnte_token: fonnte_token});
   if (res.ok) { toast('Pengaturan berhasil disimpan! ✓'); }
 }
 
