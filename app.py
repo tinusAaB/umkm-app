@@ -675,6 +675,107 @@ def del_user(uid):
     db.session.commit()
     return jsonify({'ok': True})
 
+@app.route('/api/produk/template')
+@login_required
+def download_template():
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.utils import get_column_letter
+    import io
+    
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Produk'
+    
+    header_fill = PatternFill(start_color='1e3a8a', end_color='1e3a8a', fill_type='solid')
+    header_font = Font(color='FFFFFF', bold=True)
+    example_fill = PatternFill(start_color='dbeafe', end_color='dbeafe', fill_type='solid')
+    
+    headers = ['Nama Produk', 'Kategori', 'Harga Jual', 'Modal', 'Stok']
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center')
+    
+    # Contoh data
+    contoh = [
+        ['Beras Premium 5kg', 'Makanan', 85000, 65000, 50],
+        ['Minyak Goreng 1L', 'Makanan', 22000, 18000, 30],
+        ['Sabun Mandi', 'Kesehatan', 5000, 3500, 100],
+    ]
+    for row, data in enumerate(contoh, 2):
+        for col, val in enumerate(data, 1):
+            cell = ws.cell(row=row, column=col, value=val)
+            cell.fill = example_fill
+    
+    # Kolom kategori dengan keterangan
+    ws.cell(row=6, column=1, value='* Kategori yang tersedia:')
+    ws.cell(row=7, column=1, value='Umum, Makanan, Minuman, Elektronik, Pakaian, Kesehatan, Lainnya')
+    
+    # Auto width
+    for col in range(1, 6):
+        ws.column_dimensions[get_column_letter(col)].width = 22
+    
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return send_file(buffer, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', download_name='template-produk.xlsx')
+
+@app.route('/api/produk/import', methods=['POST'])
+@login_required
+def import_produk():
+    from openpyxl import load_workbook
+    import io
+    
+    if 'file' not in request.files:
+        return jsonify({'error': 'File tidak ditemukan'}), 400
+    
+    file = request.files['file']
+    if not file.filename.endswith('.xlsx'):
+        return jsonify({'error': 'File harus format .xlsx'}), 400
+    
+    try:
+        wb = load_workbook(io.BytesIO(file.read()))
+        ws = wb.active
+        
+        berhasil = 0
+        gagal = 0
+        
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            print(f"Row data: {row}")
+            # Skip baris kosong dan baris keterangan
+            if not row[0] or str(row[0]).startswith('*'):
+                continue
+            try:
+                nama = str(row[0]).strip()
+                kategori = str(row[1]).strip() if row[1] else 'Umum'
+                harga = int(row[2]) if row[2] else 0
+                modal = int(row[3]) if row[3] else 0
+                stok = int(row[4]) if row[4] else 0
+                
+                if nama and harga > 0:
+                    # Cek apakah produk sudah ada
+                    existing = Produk.query.filter_by(nama=nama).first()
+                    if existing:
+                        existing.harga = harga
+                        existing.modal = modal
+                        existing.stok = stok
+                        existing.kategori = kategori
+                    else:
+                        p = Produk(nama=nama, kategori=kategori, harga=harga, modal=modal, stok=stok)
+                        db.session.add(p)
+                    berhasil += 1
+                else:
+                    gagal += 1
+            except:
+                gagal += 1
+        
+        db.session.commit()
+        return jsonify({'ok': True, 'berhasil': berhasil, 'gagal': gagal})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+        
 @app.route('/api/stok-alert')
 @login_required
 def stok_alert():

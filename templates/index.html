@@ -429,6 +429,13 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px;
       </div>
       <div class="field"><label>Stok Awal</label><input id="s-stok" type="number" value="99" /></div>
       <button class="btn btn-orange" onclick="tambahProduk()">Tambah Produk</button>
+      <div style="margin-top:8px;">
+        <label style="width:100%;">
+          <button class="btn btn-ghost" style="width:100%;font-size:12px;" onclick="document.getElementById('import-file').click()">📤 Import Produk dari Excel</button>
+          <input type="file" id="import-file" accept=".xlsx" style="display:none;" onchange="importProduk(this)" />
+        </label>
+        <div style="font-size:11px;color:#9ca3af;margin-top:6px;text-align:center;">Format: Kolom A=Nama, B=Kategori, C=Harga Jual, D=Modal, E=Stok</div>
+      </div>
     </div>
     <div class="card">
       <div class="card-title">Inventori produk</div>
@@ -931,6 +938,26 @@ function filterStok() {
 async function loadStok() {
   produkList = await api('/api/produk');
   filterStok();
+}
+
+async function importProduk(input) {
+  var file = input.files[0];
+  if (!file) return;
+  var formData = new FormData();
+  formData.append('file', file);
+  try {
+    var res = await fetch('/api/produk/import', {method: 'POST', body: formData});
+    var d = await res.json();
+    if (d.ok) {
+      toast('Import berhasil! ' + d.berhasil + ' produk ditambahkan ✓');
+      loadStok();
+    } else {
+      toast('Error: ' + d.error);
+    }
+  } catch(e) {
+    toast('Gagal import file!');
+  }
+  input.value = '';
 }
 
 async function tambahProduk() {
