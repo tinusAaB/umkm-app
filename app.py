@@ -251,7 +251,15 @@ def del_produk(pid):
 @login_required
 def get_transaksi():
     transaksi = Transaksi.query.order_by(Transaksi.tanggal.desc()).all()
-    return jsonify([{'id': t.id, 'pelanggan': t.pelanggan, 'total': t.total, 'items': json.loads(t.items or '[]'), 'tanggal': t.tanggal.strftime('%d/%m/%Y %H:%M')} for t in transaksi])
+    total_subtotal = sum(t.subtotal or t.total for t in transaksi)
+    total_ppn = sum(t.ppn or 0 for t in transaksi)
+    total_semua = sum(t.total for t in transaksi)
+    return jsonify({
+        'transaksi': [{'id': t.id, 'pelanggan': t.pelanggan, 'kasir': t.kasir, 'subtotal': t.subtotal or t.total, 'ppn': t.ppn or 0, 'total': t.total, 'items': json.loads(t.items or '[]'), 'tanggal': t.tanggal.strftime('%d/%m/%Y %H:%M')} for t in transaksi],
+        'total_subtotal': total_subtotal,
+        'total_ppn': total_ppn,
+        'total_semua': total_semua
+    })
 
 @app.route('/api/transaksi', methods=['POST'])
 @login_required
@@ -760,6 +768,19 @@ def export_excel():
         ws1.cell(row=row, column=6, value=t.ppn or 0)
         ws1.cell(row=row, column=7, value=t.total)
     
+    # Baris akumulasi transaksi
+    total_row = len(transaksi) + 2
+    ws1.cell(row=total_row, column=1, value='')
+    ws1.cell(row=total_row, column=2, value='')
+    ws1.cell(row=total_row, column=3, value='')
+    ws1.cell(row=total_row, column=4, value='TOTAL')
+    ws1.cell(row=total_row, column=5, value=sum(t.subtotal or t.total for t in transaksi))
+    ws1.cell(row=total_row, column=6, value=sum(t.ppn or 0 for t in transaksi))
+    ws1.cell(row=total_row, column=7, value=sum(t.total for t in transaksi))
+    # Format bold untuk baris total
+    for col in range(1, 8):
+        ws1.cell(row=total_row, column=col).font = Font(bold=True)
+        ws1.cell(row=total_row, column=col).fill = PatternFill(start_color='dbeafe', end_color='dbeafe', fill_type='solid')    
     # Auto width
     for col in range(1, 8):
         ws1.column_dimensions[get_column_letter(col)].width = 18
@@ -826,7 +847,26 @@ def export_excel():
         ws4.cell(row=row, column=6, value=j.debit)
         ws4.cell(row=row, column=7, value=j.kredit)
         ws4.cell(row=row, column=8, value=j.dibuat_oleh)
-    
+    # Baris akumulasi jurnal
+    jurnal_row = len(jurnal) + 2
+    ws4.cell(row=jurnal_row, column=1, value='')
+    ws4.cell(row=jurnal_row, column=2, value='')
+    ws4.cell(row=jurnal_row, column=3, value='')
+    ws4.cell(row=jurnal_row, column=4, value='')
+    ws4.cell(row=jurnal_row, column=5, value='TOTAL')
+    ws4.cell(row=jurnal_row, column=6, value=sum(j.debit for j in jurnal))
+    ws4.cell(row=jurnal_row, column=7, value=sum(j.kredit for j in jurnal))
+    ws4.cell(row=jurnal_row, column=8, value='')
+    # Baris saldo
+    saldo_row = jurnal_row + 1
+    ws4.cell(row=saldo_row, column=5, value='SALDO')
+    ws4.cell(row=saldo_row, column=6, value=sum(j.debit for j in jurnal) - sum(j.kredit for j in jurnal))
+    # Format bold
+    for col in range(1, 9):
+        ws4.cell(row=jurnal_row, column=col).font = Font(bold=True)
+        ws4.cell(row=jurnal_row, column=col).fill = PatternFill(start_color='dbeafe', end_color='dbeafe', fill_type='solid')
+        ws4.cell(row=saldo_row, column=col).font = Font(bold=True)
+        ws4.cell(row=saldo_row, column=col).fill = PatternFill(start_color='d1fae5', end_color='d1fae5', fill_type='solid')
     for col in range(1, 9):
         ws4.column_dimensions[get_column_letter(col)].width = 18
 
@@ -864,13 +904,23 @@ def export_pdf():
     invoice_lunas = Invoice.query.filter_by(status='Lunas').count()
 
     elemen.append(Paragraph('RINGKASAN KEUANGAN', s_section))
+    total_subtotal = db.session.query(db.func.sum(Transaksi.subtotal)).scalar() or 0
+    total_ppn = db.session.query(db.func.sum(Transaksi.ppn)).scalar() or 0
+    total_debit = db.session.query(db.func.sum(Jurnal.debit)).scalar() or 0
+    total_kredit = db.session.query(db.func.sum(Jurnal.kredit)).scalar() or 0
+    saldo_jurnal = total_debit - total_kredit
     ringkasan = [
         ['Keterangan', 'Nilai'],
-        ['Total Pendapatan', f'Rp {total_pendapatan:,}'],
+        ['Total Subtotal', f'Rp {total_subtotal:,}'],
+        ['Total PPN', f'Rp {total_ppn:,}'],
+        ['Total Pendapatan (inc. PPN)', f'Rp {total_pendapatan:,}'],
         ['Total Transaksi', str(total_transaksi)],
         ['Total Invoice', str(total_invoice)],
         ['Invoice Lunas', str(invoice_lunas)],
         ['Invoice Belum Bayar', str(total_invoice - invoice_lunas)],
+        ['Total Pemasukan Jurnal', f'Rp {total_debit:,}'],
+        ['Total Pengeluaran Jurnal', f'Rp {total_kredit:,}'],
+        ['Saldo Jurnal', f'Rp {saldo_jurnal:,}'],
     ]
     t_ringkasan = Table(ringkasan, colWidths=[10*cm, 7*cm])
     t_ringkasan.setStyle(TableStyle([

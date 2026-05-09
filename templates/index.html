@@ -320,6 +320,10 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px;
       <div class="metric metric-yellow"><div class="metric-label">Invoice Pending</div><div class="metric-val yellow" id="d-inv">0</div></div>
       <div class="metric metric-red"><div class="metric-label">Stok Menipis</div><div class="metric-val red" id="d-stok">0</div></div>
     </div>
+    <div class="metrics">
+       <div class="metric metric-blue"><div class="metric-label">Total Subtotal</div><div class="metric-val" id="d-subtotal">Rp 0</div></div>
+       <div class="metric metric-orange"><div class="metric-label">Total PPN</div><div class="metric-val" id="d-ppn">Rp 0</div></div>
+    </div>
     <div class="card">
       <div class="card-title">Transaksi terakhir</div>
       <div id="dash-trx-list"><div class="empty"><div class="empty-icon">📋</div>Belum ada transaksi</div></div>
@@ -620,6 +624,12 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px;
       <div class="banner-title">Manajemen Pengguna</div>
       <div class="banner-sub">Kelola akun owner dan kasir</div>
     </div>
+    <div class="metrics">
+      <div class="metric metric-green"><div class="metric-label">Total Pemasukan</div><div class="metric-val" id="j-total-debit">Rp 0</div></div>
+      <div class="metric metric-red"><div class="metric-label">Total Pengeluaran</div><div class="metric-val" id="j-total-kredit">Rp 0</div></div>
+      <div class="metric metric-blue"><div class="metric-label">Saldo</div><div class="metric-val" id="j-saldo">Rp 0</div></div>
+      <div class="metric metric-purple"><div class="metric-label">Jumlah Entri</div><div class="metric-val" id="j-count">0</div></div>
+    </div>
     <div class="card">
       <div class="card-title">Tambah pengguna baru</div>
       <div class="field"><label>Nama Lengkap</label><input id="u-nama" placeholder="Contoh: Budi Kasir" /></div>
@@ -744,6 +754,11 @@ async function cekStokAlert() {
 
 async function loadDashboard() {
   var d = await api('/api/dashboard');
+  var trx = await api('/api/transaksi');
+  if (trx.total_subtotal !== undefined) {
+    document.getElementById('d-subtotal').textContent = fmt(trx.total_subtotal);
+    document.getElementById('d-ppn').textContent = fmt(trx.total_ppn);
+  }
   document.getElementById('d-pendapatan').textContent = fmt(d.total_pendapatan);
   document.getElementById('d-trx').textContent = d.total_transaksi;
   document.getElementById('d-inv').textContent = d.invoice_belum;
