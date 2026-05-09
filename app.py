@@ -1040,19 +1040,23 @@ def export_pdf():
 
     # Transaksi terakhir
     elemen.append(Paragraph('TRANSAKSI TERAKHIR (20 Data)', s_section))
-    trx_data = [['No', 'Tanggal', 'Pelanggan', 'Kasir', 'Total']]
+    trx_data = [['No', 'Tanggal', 'Pelanggan', 'Kasir', 'Total (Rp)']]
     transaksi = Transaksi.query.order_by(Transaksi.tanggal.desc()).limit(20).all()
     for idx, t in enumerate(transaksi, 1):
-        trx_data.append([str(idx), t.tanggal.strftime('%d/%m/%Y'), t.pelanggan, t.kasir or '', f'Rp {t.total:,}'])
-    
-    t_trx = Table(trx_data, colWidths=[1*cm, 3.5*cm, 4*cm, 4*cm, 4.5*cm])
+        trx_data.append([str(idx), t.tanggal.strftime('%d/%m/%Y'), t.pelanggan, t.kasir or '', f'{t.total:,}'])
+
+    t_trx = Table(trx_data, colWidths=[1*cm, 3.5*cm, 4*cm, 3.5*cm, 5*cm])
     t_trx.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1e3a8a')),
         ('TEXTCOLOR', (0,0), (-1,0), colors.white),
         ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
         ('FONTSIZE', (0,0), (-1,-1), 8),
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('ALIGN', (2,0), (3,-1), 'LEFT'),
+        ('ALIGN', (1,0), (1,-1), 'LEFT'),
+        ('ALIGN', (2,0), (2,-1), 'LEFT'),
+        ('ALIGN', (3,0), (3,-1), 'LEFT'),
+        ('ALIGN', (4,0), (4,-1), 'RIGHT'),
+        ('RIGHTPADDING', (4,0), (4,-1), 10),
         ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
         ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor('#f0f4ff')]),
         ('TOPPADDING', (0,0), (-1,-1), 5),
