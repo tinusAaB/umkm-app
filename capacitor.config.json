@@ -1,5 +1,9 @@
 {
-  "appId": "com.martin.umkmpro",
+  "appId": "com.yekritu.umkmpro",
   "appName": "UMKM Pro",
-  "webDir": "www"
+  "webDir": "www",
+  "server": {
+    "url": "https://umkm-app-production.up.railway.app",
+    "cleartext": false
+  }
 }

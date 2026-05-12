@@ -239,6 +239,15 @@ def add_produk():
     db.session.commit()
     return jsonify({'id': p.id, 'nama': p.nama, 'harga': p.harga, 'modal': p.modal, 'stok': p.stok})
 
+@app.route('/api/produk/<int:pid>/stok', methods=['POST'])
+@login_required
+def update_stok(pid):
+    p = Produk.query.get_or_404(pid)
+    b = request.json
+    p.stok = int(b.get('stok', p.stok))
+    db.session.commit()
+    return jsonify({'ok': True, 'stok': p.stok})
+    
 @app.route('/api/produk/<int:pid>', methods=['DELETE'])
 @login_required
 def del_produk(pid):

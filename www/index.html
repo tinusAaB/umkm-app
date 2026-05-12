@@ -320,6 +320,10 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px;
       <div class="metric metric-yellow"><div class="metric-label">Invoice Pending</div><div class="metric-val yellow" id="d-inv">0</div></div>
       <div class="metric metric-red"><div class="metric-label">Stok Menipis</div><div class="metric-val red" id="d-stok">0</div></div>
     </div>
+    <div class="metrics">
+       <div class="metric metric-blue"><div class="metric-label">Total Subtotal</div><div class="metric-val" id="d-subtotal">Rp 0</div></div>
+       <div class="metric metric-orange"><div class="metric-label">Total PPN</div><div class="metric-val" id="d-ppn">Rp 0</div></div>
+    </div>
     <div class="card">
       <div class="card-title">Transaksi terakhir</div>
       <div id="dash-trx-list"><div class="empty"><div class="empty-icon">📋</div>Belum ada transaksi</div></div>
@@ -359,7 +363,7 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px;
       <div class="total-bar"><span class="total-label">Total pembayaran</span><span class="total-val" id="k-total">Rp 0</span></div>
       <div style="display:flex;gap:8px;margin-top:12px;">
         <button class="btn btn-purple" style="flex:1;" onclick="prosesTransaksi()">Bayar Tunai</button>
-        <button class="btn btn-green" style="flex:1;" onclick="bayarOnline()">Bayar Online</button>
+        <!-- Bayar Online - aktif setelah payment gateway aktif -->
       </div>
     </div>
   </div>
@@ -425,6 +429,13 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px;
       </div>
       <div class="field"><label>Stok Awal</label><input id="s-stok" type="number" value="99" /></div>
       <button class="btn btn-orange" onclick="tambahProduk()">Tambah Produk</button>
+      <div style="margin-top:8px;">
+        <label style="width:100%;">
+          <button class="btn btn-ghost" style="width:100%;font-size:12px;" onclick="document.getElementById('import-file').click()">📤 Import Produk dari Excel</button>
+          <input type="file" id="import-file" accept=".xlsx" style="display:none;" onchange="importProduk(this)" />
+        </label>
+        <div style="font-size:11px;color:#9ca3af;margin-top:6px;text-align:center;">Format: Kolom A=Nama, B=Kategori, C=Harga Jual, D=Modal, E=Stok</div>
+      </div>
     </div>
     <div class="card">
       <div class="card-title">Inventori produk</div>
@@ -498,6 +509,13 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px;
       <canvas id="chart-harian" height="200"></canvas>
       <div id="chart-harian-empty" class="empty" style="display:none;"><div class="empty-icon">📊</div>Belum ada data</div>
     </div>
+    <div class="card">
+  <div class="card-title">Export Laporan</div>
+  <div style="display:flex;gap:8px;">
+    <button class="btn btn-green" style="flex:1;" onclick="openUrl('/api/export/excel')">Export Excel</button>
+    <button class="btn btn-purple" style="flex:1;" onclick="openUrl('/api/export/pdf')">Export PDF</button>
+  </div>
+  </div>
     <div class="card">
       <div class="card-title">🏆 Produk terlaris</div>
       <div id="lap-terlaris"><div class="empty"><div class="empty-icon">🏆</div>Belum ada data</div></div>
@@ -609,6 +627,12 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px;
       <div class="banner-title">Manajemen Pengguna</div>
       <div class="banner-sub">Kelola akun owner dan kasir</div>
     </div>
+    <div class="metrics">
+      <div class="metric metric-green"><div class="metric-label">Total Pemasukan</div><div class="metric-val" id="j-total-debit">Rp 0</div></div>
+      <div class="metric metric-red"><div class="metric-label">Total Pengeluaran</div><div class="metric-val" id="j-total-kredit">Rp 0</div></div>
+      <div class="metric metric-blue"><div class="metric-label">Saldo</div><div class="metric-val" id="j-saldo">Rp 0</div></div>
+      <div class="metric metric-purple"><div class="metric-label">Jumlah Entri</div><div class="metric-val" id="j-count">0</div></div>
+    </div>
     <div class="card">
       <div class="card-title">Tambah pengguna baru</div>
       <div class="field"><label>Nama Lengkap</label><input id="u-nama" placeholder="Contoh: Budi Kasir" /></div>
@@ -641,7 +665,20 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px;
       <div class="field"><label>Nomor Telepon</label><input id="st-telepon" placeholder="08123456789" /></div>
       <div class="field"><label>Email</label><input id="st-email" placeholder="toko@email.com" /></div>
       <div class="field"><label>Tagline</label><input id="st-tagline" placeholder="Belanja Mudah, Harga Hemat" /></div>
-      <button class="btn btn-purple" onclick="simpanSettings()">Simpan Pengaturan</button>
+      <div class="field"><label>Token WhatsApp (Fonnte)</label>
+        <input id="st-fonnte" placeholder="Token dari fonnte.com" type="password" />
+        <div style="font-size:11px;color:var(--text3);margin-top:4px;">Daftar di <a href="https://fonnte.com" target="_blank">fonnte.com</a> untuk dapat token WA Anda sendiri</div>
+      </div>
+      <div class="field"><label>PPN (%)</label>
+        <select id="st-ppn">
+          <option value="0">0% (Tidak ada PPN)</option>
+          <option value="5">5%</option>
+          <option value="10">10%</option>
+          <option value="11">11%</option>
+          <option value="12">12%</option>
+        </select>
+      </div>
+      <button class="btn btn-purple" onclick="simpanSettings()">💾 Simpan Pengaturan</button>
     </div>
   </div>
 </div>
@@ -720,6 +757,11 @@ async function cekStokAlert() {
 
 async function loadDashboard() {
   var d = await api('/api/dashboard');
+  var trx = await api('/api/transaksi');
+  if (trx.total_subtotal !== undefined) {
+    document.getElementById('d-subtotal').textContent = fmt(trx.total_subtotal);
+    document.getElementById('d-ppn').textContent = fmt(trx.total_ppn);
+  }
   document.getElementById('d-pendapatan').textContent = fmt(d.total_pendapatan);
   document.getElementById('d-trx').textContent = d.total_transaksi;
   document.getElementById('d-inv').textContent = d.invoice_belum;
@@ -727,7 +769,7 @@ async function loadDashboard() {
   var el = document.getElementById('dash-trx-list');
   if (!d.transaksi_terakhir.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">📋</div>Belum ada transaksi</div>'; return; }
   el.innerHTML = d.transaksi_terakhir.map(function(t){
-    return '<div class="list-item"><div class="li-icon" style="background:var(--purple-light)">TRX</div><div class="li-body"><div class="li-name">' + t.pelanggan + '</div><div class="li-sub">' + t.tanggal + ' · ' + (t.kasir||'') + '</div></div><div class="li-right"><div class="li-price" style="color:var(--green)">' + fmt(t.total) + '</div><a href="/api/struk/'+t.id+'" target="_blank"><span class="badge badge-blue" style="cursor:pointer;">Struk</span></a></div></div>';
+    return '<div class="list-item"><div class="li-icon" style="background:var(--purple-light)">TRX</div><div class="li-body"><div class="li-name">' + t.pelanggan + '</div><div class="li-sub">' + t.tanggal + ' · ' + (t.kasir||'') + '</div></div><div class="li-right"><div class="li-price" style="color:var(--green)">' + fmt(t.total) + '<span onclick="openUrl(\'/api/struk/'+t.id+'\')" style="cursor:pointer;"><span class="badge badge-blue" style="cursor:pointer;">Struk</span></a></div></div>';
   }).join('');
 }
 
@@ -786,6 +828,11 @@ async function prosesTransaksi() {
   toast('Pembayaran berhasil! ✓');
 }
 
+async function openUrl(url) {
+  var fullUrl = 'https://umkm-app-production.up.railway.app' + url;
+  window.open(fullUrl, '_blank', 'location=yes,hardwareback=yes,toolbarcolor=#1e3a8a');
+}
+
 async function bayarOnline() {
   if (!keranjang.length) { toast('Keranjang masih kosong!'); return; }
   var pelanggan = document.getElementById('k-pelanggan').value || 'Pelanggan';
@@ -796,7 +843,6 @@ async function bayarOnline() {
   renderKeranjang();
   toast('Halaman pembayaran dibuka! ✓');
 }
-
 async function loadInvoice() {
   var list = await api('/api/invoice');
   var el = document.getElementById('inv-list');
@@ -892,6 +938,26 @@ function filterStok() {
 async function loadStok() {
   produkList = await api('/api/produk');
   filterStok();
+}
+
+async function importProduk(input) {
+  var file = input.files[0];
+  if (!file) return;
+  var formData = new FormData();
+  formData.append('file', file);
+  try {
+    var res = await fetch('/api/produk/import', {method: 'POST', body: formData});
+    var d = await res.json();
+    if (d.ok) {
+      toast('Import berhasil! ' + d.berhasil + ' produk ditambahkan ✓');
+      loadStok();
+    } else {
+      toast('Error: ' + d.error);
+    }
+  } catch(e) {
+    toast('Gagal import file!');
+  }
+  input.value = '';
 }
 
 async function tambahProduk() {
@@ -1087,6 +1153,8 @@ async function loadSettings() {
   document.getElementById('st-telepon').value = d.telepon || '';
   document.getElementById('st-email').value = d.email || '';
   document.getElementById('st-tagline').value = d.tagline || '';
+  document.getElementById('st-ppn').value = d.ppn_persen || 10;
+  document.getElementById('st-fonnte').value = d.fonnte_token || '';
 }
 
 async function simpanSettings() {
@@ -1096,7 +1164,9 @@ async function simpanSettings() {
   var email = document.getElementById('st-email').value;
   var tagline = document.getElementById('st-tagline').value;
   if (!nama) { toast('Nama toko wajib diisi!'); return; }
-  var res = await api('/api/toko', 'POST', {nama, alamat, telepon, email, tagline});
+  var ppn_persen = document.getElementById('st-ppn').value;
+  var fonnte_token = document.getElementById('st-fonnte').value;
+  var res = await api('/api/toko', 'POST', {nama, alamat, telepon, email, tagline, ppn_persen: ppn_persen, fonnte_token: fonnte_token});
   if (res.ok) { toast('Pengaturan berhasil disimpan! ✓'); }
 }
 
