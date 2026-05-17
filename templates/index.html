@@ -420,11 +420,10 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px;
           <option value="Elektronik">Elektronik</option>
           <option value="Pakaian">Pakaian</option>
           <option value="Kesehatan">Kesehatan</option>
-          <option value="Lainnya">Lainnya</option>
-        <option value="__custom__">+ Tambah Kategori Baru...</option>
+          <option value="__custom__">+ Tambah Kategori Baru...</option>
         </select>
       </div>
-      <div class="field" id="s-kategori-custom-wrap" style="display:none;"><label>Nama Kategori Baru</label><input id="s-kategori-custom" placeholder="Contoh: Peralatan Rumah" /></div>
+      <div class="field" id="s-kategori-custom-wrap" style="display:none;"><label>Nama Kategori Baru</label><input id="s-kategori-custom" placeholder="Contoh: Peralatan Rumah" onkeypress="if(event.key==='Enter')simpanKategoriBaru()" /><button class="btn btn-green" style="margin-top:6px;" onclick="simpanKategoriBaru()">+ Simpan Kategori</button></div>
       <div class="row2">
         <div class="field"><label>Harga Jual</label><input id="s-harga" type="number" placeholder="75000" /></div>
         <div class="field"><label>Modal</label><input id="s-modal" type="number" placeholder="15000" /></div>
@@ -942,6 +941,31 @@ function filterStok() {
 
 async function loadStok() {
   produkList = await api('/api/produk');
+  
+  // Update semua dropdown kategori dari produk yang ada
+  var kategoriList = [...new Set(produkList.map(function(p){ return p.kategori; }).filter(Boolean))].sort();
+  var defaultKategori = ['Umum', 'Makanan', 'Minuman', 'Elektronik', 'Pakaian', 'Kesehatan'];
+  
+  ['s-kategori', 's-filter-kategori', 'k-kategori-filter', 'inv-kategori-filter'].forEach(function(selId) {
+    var sel = document.getElementById(selId);
+    if (!sel) return;
+    var existing = Array.from(sel.options).map(function(o){ return o.value; });
+    kategoriList.forEach(function(kat) {
+      if (!existing.includes(kat) && !defaultKategori.includes(kat) && kat !== '__custom__') {
+        var opt = document.createElement('option');
+        opt.value = kat;
+        opt.text = kat;
+        // Sisipkan sebelum opsi __custom__ kalau ada
+        var customOpt = sel.querySelector('[value="__custom__"]');
+        if (customOpt) {
+          sel.insertBefore(opt, customOpt);
+        } else {
+          sel.appendChild(opt);
+        }
+      }
+    });
+  });
+  
   filterStok();
 }
 
@@ -955,8 +979,23 @@ async function importProduk(input) {
     var d = await res.json();
     if (d.ok) {
       toast('Import berhasil! ' + d.berhasil + ' produk ditambahkan ✓');
+      // Update dropdown kategori dari produk yang baru diimport
+      var produkBaru = await api('/api/produk');
+      produkBaru.forEach(function(p) {
+        if (!p.kategori) return;
+        ['s-kategori', 's-filter-kategori', 'k-kategori-filter', 'inv-kategori-filter'].forEach(function(selId) {
+          var sel = document.getElementById(selId);
+          if (!sel) return;
+          var sudahAda = Array.from(sel.options).some(function(o){ return o.value === p.kategori; });
+          if (!sudahAda) {
+            var opt = document.createElement('option');
+            opt.value = p.kategori;
+            opt.text = p.kategori;
+            sel.appendChild(opt);
+          }
+        });
+      });
       loadStok();
-    } else {
       toast('Error: ' + d.error);
     }
   } catch(e) {
@@ -984,6 +1023,46 @@ function cekKategoriLain(sel) {
   }
 }
 
+function simpanKategoriBaru() {
+  var namaKategori = document.getElementById('s-kategori-custom').value.trim();
+  if (!namaKategori) { toast('Nama kategori tidak boleh kosong!'); return; }
+  var sel = document.getElementById('s-kategori');
+  var sudahAda = Array.from(sel.options).some(function(o){ return o.value === namaKategori; });
+  if (!sudahAda) {
+    var opt = document.createElement('option');
+    opt.value = namaKategori;
+    opt.text = namaKategori;
+    sel.insertBefore(opt, sel.options[sel.options.length - 1]);
+  }
+  sel.value = namaKategori;
+  document.getElementById('s-kategori-custom-wrap').style.display = 'none';
+  document.getElementById('s-kategori-custom').value = '';
+  
+  // Simpan juga ke filter kategori di inventori
+  var selFilter = document.getElementById('s-filter-kategori');
+  var sudahAdaFilter = Array.from(selFilter.options).some(function(o){ return o.value === namaKategori; });
+  if (!sudahAdaFilter) {
+    var optFilter = document.createElement('option');
+    optFilter.value = namaKategori;
+    optFilter.text = namaKategori;
+    selFilter.appendChild(optFilter);
+  }
+  
+  // Simpan juga ke filter kasir
+  var selKasir = document.getElementById('k-kategori-filter');
+  if (selKasir) {
+    var sudahAdaKasir = Array.from(selKasir.options).some(function(o){ return o.value === namaKategori; });
+    if (!sudahAdaKasir) {
+      var optKasir = document.createElement('option');
+      optKasir.value = namaKategori;
+      optKasir.text = namaKategori;
+      selKasir.appendChild(optKasir);
+    }
+  }
+  
+  toast('Kategori "' + namaKategori + '" berhasil ditambahkan! ✓');
+}
+
 function getKategoriTerpilih() {
   var sel = document.getElementById('s-kategori');
   if (sel.value === '__custom__') {
@@ -1004,6 +1083,23 @@ async function tambahProduk() {
   document.getElementById('s-harga').value = '';
   document.getElementById('s-modal').value = '';
   toast('Produk berhasil ditambahkan ✓');
+  // Tambahkan kategori baru ke dropdown kalau belum ada
+  var sel = document.getElementById('s-kategori');
+  if (sel.value === '__custom__') {
+    var namaKategori = document.getElementById('s-kategori-custom').value;
+    if (namaKategori) {
+      var sudahAda = Array.from(sel.options).some(function(o){ return o.value === namaKategori; });
+      if (!sudahAda) {
+        var opt = document.createElement('option');
+        opt.value = namaKategori;
+        opt.text = namaKategori;
+        sel.insertBefore(opt, sel.options[sel.options.length - 1]);
+      }
+      sel.value = namaKategori;
+    }
+    document.getElementById('s-kategori-custom-wrap').style.display = 'none';
+    document.getElementById('s-kategori-custom').value = '';
+  }
   loadStok();
 }
 
