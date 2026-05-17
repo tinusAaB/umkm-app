@@ -413,7 +413,7 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px;
       <div class="card-title">Tambah produk baru</div>
       <div class="field"><label>Nama Produk</label><input id="s-nama" placeholder="Contoh: Beras Premium 5kg" /></div>
       <div class="field"><label>Kategori</label>
-        <select id="s-kategori">
+        <select id="s-kategori" onchange="cekKategoriLain(this)">
           <option value="Umum">Umum</option>
           <option value="Makanan">Makanan</option>
           <option value="Minuman">Minuman</option>
@@ -421,8 +421,10 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px;
           <option value="Pakaian">Pakaian</option>
           <option value="Kesehatan">Kesehatan</option>
           <option value="Lainnya">Lainnya</option>
+        <option value="__custom__">+ Tambah Kategori Baru...</option>
         </select>
       </div>
+      <div class="field" id="s-kategori-custom-wrap" style="display:none;"><label>Nama Kategori Baru</label><input id="s-kategori-custom" placeholder="Contoh: Peralatan Rumah" /></div>
       <div class="row2">
         <div class="field"><label>Harga Jual</label><input id="s-harga" type="number" placeholder="75000" /></div>
         <div class="field"><label>Modal</label><input id="s-modal" type="number" placeholder="15000" /></div>
@@ -569,7 +571,8 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px;
         <div class="li-right"><div class="li-price" style="color:var(--purple);font-size:18px;" id="n-aset">Rp 0</div></div>
       </div>
     </div>
-  </div>
+    <button class="btn btn-purple" onclick="openUrl('/api/neraca/pdf')">Cetak PDF Neraca</button>
+</div>
 
   <!-- JURNAL -->
   <div id="page-jurnal" class="page">
@@ -608,6 +611,7 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px;
         <div class="field"><label>Dari Tanggal</label><input id="j-dari" type="date" onchange="loadJurnal()" /></div>
         <div class="field"><label>Sampai Tanggal</label><input id="j-sampai" type="date" onchange="loadJurnal()" /></div>
       </div>
+      <button class="btn btn-purple" style="margin-top:8px;" onclick="cetakJurnalPDF()">Cetak PDF Jurnal</button>
     </div>
     <div class="metrics">
       <div class="metric metric-green"><div class="metric-label">Total Pemasukan</div><div class="metric-val green" id="j-total-debit">Rp 0</div></div>
@@ -961,12 +965,39 @@ async function importProduk(input) {
   input.value = '';
 }
 
+
+function cetakJurnalPDF() {
+  var dari = document.getElementById('j-dari').value;
+  var sampai = document.getElementById('j-sampai').value;
+  var url = '/api/jurnal/pdf';
+  if (dari || sampai) url += '?dari=' + dari + '&sampai=' + sampai;
+  openUrl(url);
+}
+
+function cekKategoriLain(sel) {
+  var wrap = document.getElementById('s-kategori-custom-wrap');
+  if (sel.value === '__custom__') {
+    wrap.style.display = 'block';
+    document.getElementById('s-kategori-custom').focus();
+  } else {
+    wrap.style.display = 'none';
+  }
+}
+
+function getKategoriTerpilih() {
+  var sel = document.getElementById('s-kategori');
+  if (sel.value === '__custom__') {
+    return document.getElementById('s-kategori-custom').value || 'Lainnya';
+  }
+  return sel.value;
+}
+
 async function tambahProduk() {
   var nama = document.getElementById('s-nama').value;
   var harga = document.getElementById('s-harga').value;
   var modal = document.getElementById('s-modal').value;
   var stok = document.getElementById('s-stok').value;
-  var kategori = document.getElementById('s-kategori').value;
+  var kategori = getKategoriTerpilih();
   if (!nama || !harga) { toast('Nama dan harga wajib diisi!'); return; }
   await api('/api/produk', 'POST', {nama, harga, modal: modal||0, stok: stok||99, kategori: kategori});
   document.getElementById('s-nama').value = '';
