@@ -413,7 +413,7 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px;
       <div class="card-title">Tambah produk baru</div>
       <div class="field"><label>Nama Produk</label><input id="s-nama" placeholder="Contoh: Beras Premium 5kg" /></div>
       <div class="field"><label>Kategori</label>
-        <select id="s-kategori">
+        <select id="s-kategori" onchange="toggleKategoriCustom(this)">
           <option value="Umum">Umum</option>
           <option value="Makanan">Makanan</option>
           <option value="Minuman">Minuman</option>
@@ -421,7 +421,9 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px;
           <option value="Pakaian">Pakaian</option>
           <option value="Kesehatan">Kesehatan</option>
           <option value="Lainnya">Lainnya</option>
+          <option value="__custom__">+ Tambah Kategori Baru</option>
         </select>
+        <input type="text" id="s-kategori-custom" placeholder="Nama kategori baru..." style="display:none;margin-top:8px;width:100%;background:rgba(248,250,255,0.9);border:2px solid var(--purple);border-radius:var(--radius-sm);padding:10px 14px;color:var(--text);font-family:'Nunito',sans-serif;font-size:13px;font-weight:600;outline:none;" />
       </div>
       <div class="row2">
         <div class="field"><label>Harga Jual</label><input id="s-harga" type="number" placeholder="75000" /></div>
@@ -569,6 +571,10 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px;
         <div class="li-right"><div class="li-price" style="color:var(--purple);font-size:18px;" id="n-aset">Rp 0</div></div>
       </div>
     </div>
+    <div class="card">
+      <div class="card-title">Export Neraca</div>
+      <button class="btn btn-purple" onclick="openUrl('/api/neraca/pdf')">Cetak PDF Neraca</button>
+    </div>
   </div>
 
   <!-- JURNAL -->
@@ -608,6 +614,7 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px;
         <div class="field"><label>Dari Tanggal</label><input id="j-dari" type="date" onchange="loadJurnal()" /></div>
         <div class="field"><label>Sampai Tanggal</label><input id="j-sampai" type="date" onchange="loadJurnal()" /></div>
       </div>
+      <button class="btn btn-purple" style="margin-top:8px;" onclick="cetakJurnalPdf()">Cetak PDF Jurnal</button>
     </div>
     <div class="metrics">
       <div class="metric metric-green"><div class="metric-label">Total Pemasukan</div><div class="metric-val green" id="j-total-debit">Rp 0</div></div>
@@ -709,7 +716,7 @@ function goPage(name, el) {
   if (name === 'dashboard') loadDashboard();
   if (name === 'kasir') loadProdukSelect();
   if (name === 'stok') loadStok();
-  if (name === 'invoice') { loadInvoice(); filterProdukInvoice(); }
+  if (name === 'invoice') { loadInvoice(); if (!produkList.length) { api('/api/produk').then(function(d){ produkList = d; filterProdukInvoice(); }); } else { filterProdukInvoice(); } }
   if (name === 'laba') { loadLabaAnalisis(); hitungLaba(); }
   if (name === 'laporan') loadLaporan();
   if (name === 'neraca') loadNeraca();
@@ -745,7 +752,8 @@ async function cekStokAlert() {
     badge.style.display = 'inline';
     setTimeout(function(){
       var overlay = document.createElement('div');
-      overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;';
+      overlay.id = 'edit-stok-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;';
       var nama = d.produk.map(function(p){ return '⚠️ ' + p.nama + ' (sisa ' + p.stok + ')'; }).join('\n');
       overlay.innerHTML = '<div style="background:#fff;border-radius:24px;padding:28px;max-width:360px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);"><div style="font-size:40px;text-align:center;margin-bottom:12px;">⚠️</div><div style="font-size:18px;font-weight:900;text-align:center;color:#1a1a2e;margin-bottom:8px;">Stok Menipis!</div><div style="font-size:13px;color:#6b7280;text-align:center;margin-bottom:12px;font-weight:700;">' + d.jumlah + ' produk perlu segera diisi ulang:</div><div style="background:#fff7ed;border:2px solid #fed7aa;border-radius:12px;padding:14px;margin-bottom:18px;font-size:12px;font-weight:700;color:#92400e;white-space:pre-line;">' + nama + '</div><button onclick="this.closest(\'div\').parentElement.remove()" style="width:100%;padding:13px;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;border:none;border-radius:12px;font-family:Nunito,sans-serif;font-size:14px;font-weight:900;cursor:pointer;">Mengerti, segera isi ulang ✓</button></div>';
       document.body.appendChild(overlay);
@@ -769,7 +777,7 @@ async function loadDashboard() {
   var el = document.getElementById('dash-trx-list');
   if (!d.transaksi_terakhir.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">📋</div>Belum ada transaksi</div>'; return; }
   el.innerHTML = d.transaksi_terakhir.map(function(t){
-    return '<div class="list-item"><div class="li-icon" style="background:var(--purple-light)">TRX</div><div class="li-body"><div class="li-name">' + t.pelanggan + '</div><div class="li-sub">' + t.tanggal + ' · ' + (t.kasir||'') + '</div></div><div class="li-right"><div class="li-price" style="color:var(--green)">' + fmt(t.total) + '<span onclick="openUrl(\'/api/struk/'+t.id+'\')" style="cursor:pointer;"><span class="badge badge-blue" style="cursor:pointer;">Struk</span></a></div></div>';
+    return '<div class="list-item"><div class="li-icon" style="background:var(--purple-light)">TRX</div><div class="li-body"><div class="li-name">' + t.pelanggan + '</div><div class="li-sub">' + t.tanggal + ' - ' + (t.kasir||'') + '</div></div><div class="li-right"><div class="li-price" style="color:var(--green)">' + fmt(t.total) + '</div><span onclick="openUrl(\'/api/struk/'+t.id+'\')" style="cursor:pointer;"><span class="badge badge-blue">Struk</span></span></div></div>';
   }).join('');
 }
 
@@ -829,7 +837,7 @@ async function prosesTransaksi() {
 }
 
 async function openUrl(url) {
-  var fullUrl = 'https://umkm-app-production.up.railway.app' + url;
+  var fullUrl = window.location.origin + url;
   window.open(fullUrl, '_blank', 'location=yes,hardwareback=yes,toolbarcolor=#1e3a8a');
 }
 
@@ -931,7 +939,7 @@ function filterStok() {
   el.innerHTML = filtered.map(function(p){
     var badge = p.stok < 10 ? 'badge-orange' : 'badge-green';
     var label = p.stok < 10 ? 'Menipis' : 'Aman';
-    return '<div class="list-item"><div class="li-icon" style="background:var(--orange-light)">STK</div><div class="li-body"><div class="li-name">'+p.nama+'</div><div class="li-sub">'+(p.kategori||'Umum')+' · Modal: '+fmt(p.modal)+' · Stok: '+p.stok+'</div></div><div class="li-right"><div class="li-price">'+fmt(p.harga)+'</div><span class="badge '+badge+'">'+label+'</span><br><button class="btn btn-sm btn-red-soft" style="margin-top:4px;" onclick="hapusProduk('+p.id+')">Hapus</button></div></div>';
+    return '<div class="list-item"><div class="li-icon" style="background:var(--orange-light)">STK</div><div class="li-body"><div class="li-name">'+p.nama+'</div><div class="li-sub">'+(p.kategori||'Umum')+' · Modal: '+fmt(p.modal)+' · Stok: '+p.stok+'</div></div><div class="li-right"><div class="li-price">'+fmt(p.harga)+'</div><span class="badge '+badge+'">'+label+'</span><br><button class="btn btn-sm btn-blue-soft" style="margin-top:4px;" onclick="editStok('+p.id+',\''+p.nama+'\','+p.stok+')">Edit Stok</button><br><button class="btn btn-sm btn-red-soft" style="margin-top:4px;" onclick="hapusProduk('+p.id+')">Hapus</button></div></div>';
   }).join('');
 }
 
@@ -960,19 +968,85 @@ async function importProduk(input) {
   input.value = '';
 }
 
+function toggleKategoriCustom(sel) {
+  var customInput = document.getElementById('s-kategori-custom');
+  if (sel.value === '__custom__') {
+    customInput.style.display = 'block';
+    customInput.focus();
+  } else {
+    customInput.style.display = 'none';
+  }
+}
+
 async function tambahProduk() {
   var nama = document.getElementById('s-nama').value;
   var harga = document.getElementById('s-harga').value;
   var modal = document.getElementById('s-modal').value;
   var stok = document.getElementById('s-stok').value;
-  var kategori = document.getElementById('s-kategori').value;
+  var sel = document.getElementById('s-kategori');
+  var kategori = sel.value;
+  if (kategori === '__custom__') {
+    kategori = document.getElementById('s-kategori-custom').value.trim();
+    if (!kategori) { toast('Nama kategori tidak boleh kosong!'); return; }
+  }
   if (!nama || !harga) { toast('Nama dan harga wajib diisi!'); return; }
   await api('/api/produk', 'POST', {nama, harga, modal: modal||0, stok: stok||99, kategori: kategori});
+  if (sel.value === '__custom__') {
+    var customVal = document.getElementById('s-kategori-custom').value.trim();
+    var existing = Array.from(sel.options).find(function(o){ return o.value === customVal; });
+    if (!existing) {
+      var opt = document.createElement('option');
+      opt.value = customVal; opt.textContent = customVal;
+      sel.insertBefore(opt, sel.querySelector('option[value="__custom__"]'));
+    }
+    sel.value = customVal;
+    document.getElementById('s-kategori-custom').style.display = 'none';
+    document.getElementById('s-kategori-custom').value = '';
+  }
   document.getElementById('s-nama').value = '';
   document.getElementById('s-harga').value = '';
   document.getElementById('s-modal').value = '';
   toast('Produk berhasil ditambahkan ✓');
   loadStok();
+}
+
+function cetakJurnalPdf() {
+  var dari = document.getElementById('j-dari').value;
+  var sampai = document.getElementById('j-sampai').value;
+  var url = '/api/jurnal/pdf';
+  if (dari || sampai) url += '?dari=' + dari + '&sampai=' + sampai;
+  openUrl(url);
+}
+
+function editStok(id, nama, stokSaat) {
+  var overlay = document.createElement('div');
+  overlay.id = 'edit-stok-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;';
+  overlay.innerHTML = '<div style="background:#fff;border-radius:20px;padding:24px;max-width:360px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.2);">' +
+    '<div style="font-size:16px;font-weight:800;color:#1e3a8a;margin-bottom:4px;">Edit Stok</div>' +
+    '<div style="font-size:13px;color:#6b7280;margin-bottom:16px;">'+nama+'</div>' +
+    '<label style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;">Jumlah Stok Baru</label>' +
+    '<input type="number" id="edit-stok-val" value="'+stokSaat+'" min="0" style="width:100%;background:#f9fafb;border:2px solid #e5e7eb;border-radius:10px;padding:10px 14px;font-size:16px;font-weight:700;margin:8px 0 16px;outline:none;font-family:Nunito,sans-serif;" />' +
+    '<div style="display:flex;gap:8px;">' +
+    '<button onclick="document.getElementById(\'edit-stok-overlay\').remove()" style="flex:1;padding:12px;background:#f3f4f6;color:#6b7280;border:none;border-radius:10px;font-family:Nunito,sans-serif;font-size:13px;font-weight:700;cursor:pointer;">Batal</button>' +
+    '<button onclick="simpanEditStok('+id+')" style="flex:1;padding:12px;background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;border:none;border-radius:10px;font-family:Nunito,sans-serif;font-size:13px;font-weight:700;cursor:pointer;">Simpan</button>' +
+    '</div></div>';
+  document.body.appendChild(overlay);
+  setTimeout(function(){ document.getElementById('edit-stok-val').focus(); }, 100);
+}
+
+async function simpanEditStok(id) {
+  var stokBaru = parseInt(document.getElementById('edit-stok-val').value);
+  if (isNaN(stokBaru) || stokBaru < 0) { toast('Jumlah stok tidak valid!'); return; }
+  var res = await api('/api/produk/'+id+'/stok', 'POST', {stok: stokBaru});
+  if (res.ok) {
+    var overlay = document.getElementById('edit-stok-overlay');
+    if (overlay) overlay.remove();
+    toast('Stok berhasil diperbarui! ✓');
+    loadStok();
+  } else {
+    toast('Gagal update stok!');
+  }
 }
 
 async function hapusProduk(id) {

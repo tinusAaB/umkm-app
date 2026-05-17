@@ -260,11 +260,11 @@ def del_produk(pid):
 @login_required
 def get_transaksi():
     transaksi = Transaksi.query.order_by(Transaksi.tanggal.desc()).all()
-    total_subtotal = sum(t.subtotal or t.total for t in transaksi)
+    total_subtotal = sum(t.subtotal if t.subtotal is not None else t.total for t in transaksi)
     total_ppn = sum(t.ppn or 0 for t in transaksi)
     total_semua = sum(t.total for t in transaksi)
     return jsonify({
-        'transaksi': [{'id': t.id, 'pelanggan': t.pelanggan, 'kasir': t.kasir, 'subtotal': t.subtotal or t.total, 'ppn': t.ppn or 0, 'total': t.total, 'items': json.loads(t.items or '[]'), 'tanggal': t.tanggal.strftime('%d/%m/%Y %H:%M')} for t in transaksi],
+        'transaksi': [{'id': t.id, 'pelanggan': t.pelanggan, 'kasir': t.kasir, 'subtotal': t.subtotal if t.subtotal is not None else t.total, 'ppn': t.ppn or 0, 'total': t.total, 'items': json.loads(t.items or '[]'), 'tanggal': t.tanggal.strftime('%d/%m/%Y %H:%M')} for t in transaksi],
         'total_subtotal': total_subtotal,
         'total_ppn': total_ppn,
         'total_semua': total_semua
@@ -297,10 +297,8 @@ def add_transaksi():
     db.session.commit()
     nomor = b.get('nomor_wa', '')
     if nomor:
-        toko = Toko.query.first()
         nama_toko = toko.nama if toko else 'UMKM Pro'
-        toko_ppn = Toko.query.first()
-        ppn_persen_wa = toko_ppn.ppn_persen if toko_ppn and toko_ppn.ppn_persen is not None else 10
+        ppn_persen_wa = toko.ppn_persen if toko and toko.ppn_persen is not None else 10
         ppn_wa = round(total * ppn_persen_wa / 100)
         total_ppn_wa = total + ppn_wa
         pesan = f"✅ *Struk Pembelian {nama_toko}*\n\n"
@@ -454,8 +452,7 @@ def cetak_invoice(iid):
     elemen.append(Spacer(1, 0.3*cm))
 
     # Total (rata kanan)
-    items_list_total = json.loads(i.items or "[]")
-    subtotal_inv = sum(item["jumlah"] * item["harga"] for item in items_list_total) if items_list_total else i.harga
+    subtotal_inv = sum(item["jumlah"] * item["harga"] for item in items_list) if items_list else i.harga
     toko_ppn = Toko.query.first()
     ppn_persen_inv = toko_ppn.ppn_persen if toko_ppn and toko_ppn.ppn_persen is not None else 10
     ppn_inv = round(subtotal_inv * ppn_persen_inv / 100)
@@ -874,7 +871,7 @@ def export_excel():
         ws1.cell(row=row, column=2, value=t.tanggal.strftime('%d/%m/%Y %H:%M'))
         ws1.cell(row=row, column=3, value=t.pelanggan)
         ws1.cell(row=row, column=4, value=t.kasir)
-        ws1.cell(row=row, column=5, value=t.subtotal or t.total)
+        ws1.cell(row=row, column=5, value=t.subtotal if t.subtotal is not None else t.total)
         ws1.cell(row=row, column=6, value=t.ppn or 0)
         ws1.cell(row=row, column=7, value=t.total)
     
@@ -884,7 +881,7 @@ def export_excel():
     ws1.cell(row=total_row, column=2, value='')
     ws1.cell(row=total_row, column=3, value='')
     ws1.cell(row=total_row, column=4, value='TOTAL')
-    ws1.cell(row=total_row, column=5, value=sum(t.subtotal or t.total for t in transaksi))
+    ws1.cell(row=total_row, column=5, value=sum(t.subtotal if t.subtotal is not None else t.total for t in transaksi))
     ws1.cell(row=total_row, column=6, value=sum(t.ppn or 0 for t in transaksi))
     ws1.cell(row=total_row, column=7, value=sum(t.total for t in transaksi))
     # Format bold untuk baris total
@@ -1088,7 +1085,7 @@ def dashboard():
     return jsonify({
         'total_pendapatan': total_pendapatan, 'total_transaksi': total_transaksi,
         'invoice_belum': invoice_belum, 'stok_menipis': stok_menipis,
-        'transaksi_terakhir': [{'id': t.id, 'pelanggan': t.pelanggan, 'total': t.total, 'items': json.loads(t.items or '[]'), 'tanggal': t.tanggal.strftime('%d/%m/%Y %H:%M')} for t in transaksi_terakhir]
+        'transaksi_terakhir': [{'id': t.id, 'pelanggan': t.pelanggan, 'kasir': t.kasir, 'total': t.total, 'items': json.loads(t.items or '[]'), 'tanggal': t.tanggal.strftime('%d/%m/%Y %H:%M')} for t in transaksi_terakhir]
     })
 
 with app.app_context():
@@ -1098,6 +1095,214 @@ with app.app_context():
         print(f"Database init error: {e}")
 
 
+
+@app.route('/api/neraca/pdf')
+@login_required
+def neraca_pdf():
+    from reportlab.platypus import HRFlowable
+    toko = Toko.query.first()
+    nama_toko = toko.nama if toko else 'UMKM Pro'
+    alamat_toko = toko.alamat if toko else ''
+    telepon_toko = toko.telepon if toko else ''
+
+    total_pendapatan = db.session.query(db.func.sum(Transaksi.total)).scalar() or 0
+    total_hpp = 0
+    transaksi_all = Transaksi.query.all()
+    for t in transaksi_all:
+        items = json.loads(t.items or '[]')
+        for item in items:
+            p = Produk.query.get(item['id'])
+            if p:
+                total_hpp += p.modal * item['qty']
+    laba_kotor = total_pendapatan - total_hpp
+    margin = round(laba_kotor / total_pendapatan * 100, 1) if total_pendapatan > 0 else 0
+    nilai_stok = db.session.query(db.func.sum(Produk.modal * Produk.stok)).scalar() or 0
+    piutang = db.session.query(db.func.sum(Invoice.total)).filter_by(status='Belum Bayar').scalar() or 0
+    invoice_lunas = db.session.query(db.func.sum(Invoice.total)).filter_by(status='Lunas').scalar() or 0
+    total_aset = nilai_stok + piutang + total_pendapatan
+    total_transaksi = len(transaksi_all)
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4,
+        rightMargin=2*cm, leftMargin=2*cm, topMargin=2*cm, bottomMargin=2*cm)
+    elemen = []
+
+    s_judul = ParagraphStyle('judul', fontSize=18, fontName='Helvetica-Bold', alignment=1, spaceAfter=4)
+    s_sub = ParagraphStyle('sub', fontSize=10, fontName='Helvetica', alignment=1, textColor=colors.HexColor('#666666'), spaceAfter=4)
+    s_section = ParagraphStyle('section', fontSize=11, fontName='Helvetica-Bold', spaceAfter=8, textColor=colors.HexColor('#1e3a8a'))
+    s_footer = ParagraphStyle('footer', fontSize=8, fontName='Helvetica', textColor=colors.HexColor('#999999'), alignment=1)
+
+    elemen.append(Paragraph('NERACA KEUANGAN', s_judul))
+    elemen.append(Paragraph(nama_toko, s_sub))
+    if alamat_toko:
+        elemen.append(Paragraph(alamat_toko, s_sub))
+    elemen.append(Paragraph(f'Per {datetime.now().strftime("%d %B %Y")}', s_sub))
+    elemen.append(HRFlowable(width='100%', thickness=1.5, color=colors.HexColor('#1e3a8a'), spaceAfter=14))
+
+    elemen.append(Paragraph('LAPORAN LABA RUGI', s_section))
+    laba_data = [
+        ['Keterangan', 'Nilai'],
+        ['Total Pendapatan (termasuk PPN)', f'Rp {total_pendapatan:,}'],
+        ['Harga Pokok Penjualan (HPP)', f'(Rp {total_hpp:,})'],
+        ['Laba Kotor', f'Rp {laba_kotor:,}'],
+        ['Margin Keuntungan', f'{margin}%'],
+        ['Total Transaksi', f'{total_transaksi} transaksi'],
+    ]
+    t_laba = Table(laba_data, colWidths=[12*cm, 5*cm])
+    t_laba.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1e3a8a')),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,-1), 9),
+        ('ALIGN', (1,0), (1,-1), 'RIGHT'),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
+        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor('#f0f4ff')]),
+        ('FONTNAME', (0,3), (-1,3), 'Helvetica-Bold'),
+        ('TOPPADDING', (0,0), (-1,-1), 7),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 7),
+        ('LEFTPADDING', (0,0), (-1,-1), 10),
+        ('RIGHTPADDING', (1,0), (1,-1), 10),
+    ]))
+    elemen.append(t_laba)
+    elemen.append(Spacer(1, 0.5*cm))
+
+    elemen.append(Paragraph('POSISI ASET', s_section))
+    aset_data = [
+        ['Keterangan', 'Nilai'],
+        ['Nilai Stok (Modal di Gudang)', f'Rp {nilai_stok:,}'],
+        ['Piutang (Invoice Belum Bayar)', f'Rp {piutang:,}'],
+        ['Invoice Lunas (Pembayaran Diterima)', f'Rp {invoice_lunas:,}'],
+        ['Total Pendapatan Diterima', f'Rp {total_pendapatan:,}'],
+        ['Total Aset (Estimasi)', f'Rp {total_aset:,}'],
+    ]
+    t_aset = Table(aset_data, colWidths=[12*cm, 5*cm])
+    t_aset.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#059669')),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,-1), 9),
+        ('ALIGN', (1,0), (1,-1), 'RIGHT'),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
+        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor('#f0fff4')]),
+        ('FONTNAME', (0,5), (-1,5), 'Helvetica-Bold'),
+        ('TOPPADDING', (0,0), (-1,-1), 7),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 7),
+        ('LEFTPADDING', (0,0), (-1,-1), 10),
+        ('RIGHTPADDING', (1,0), (1,-1), 10),
+    ]))
+    elemen.append(t_aset)
+    elemen.append(Spacer(1, 1*cm))
+    elemen.append(HRFlowable(width='100%', thickness=0.5, color=colors.HexColor('#cccccc'), spaceAfter=8))
+    elemen.append(Paragraph(f'Dicetak: {datetime.now().strftime("%d/%m/%Y %H:%M")}  ·  {nama_toko}' + (f'  ·  {telepon_toko}' if telepon_toko else ''), s_footer))
+
+    doc.build(elemen)
+    buffer.seek(0)
+    return send_file(buffer, mimetype='application/pdf', download_name=f'neraca-{datetime.now().strftime("%Y%m%d")}.pdf')
+
+@app.route('/api/jurnal/pdf')
+@login_required
+def jurnal_pdf():
+    from reportlab.platypus import HRFlowable
+    dari = request.args.get('dari', '')
+    sampai = request.args.get('sampai', '')
+    query = Jurnal.query
+    if dari:
+        query = query.filter(Jurnal.tanggal >= dari)
+    if sampai:
+        query = query.filter(Jurnal.tanggal <= sampai + ' 23:59:59')
+    jurnal = query.order_by(Jurnal.tanggal.asc()).all()
+    total_debit = sum(j.debit for j in jurnal)
+    total_kredit = sum(j.kredit for j in jurnal)
+    saldo = total_debit - total_kredit
+
+    toko = Toko.query.first()
+    nama_toko = toko.nama if toko else 'UMKM Pro'
+    telepon_toko = toko.telepon if toko else ''
+
+    if dari and sampai:
+        periode = f'{dari} s/d {sampai}'
+    elif dari:
+        periode = f'Dari {dari}'
+    elif sampai:
+        periode = f'Sampai {sampai}'
+    else:
+        periode = 'Semua periode'
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4,
+        rightMargin=2*cm, leftMargin=2*cm, topMargin=2*cm, bottomMargin=2*cm)
+    elemen = []
+
+    s_judul = ParagraphStyle('judul', fontSize=16, fontName='Helvetica-Bold', alignment=1, spaceAfter=4)
+    s_sub = ParagraphStyle('sub', fontSize=10, fontName='Helvetica', alignment=1, textColor=colors.HexColor('#666666'), spaceAfter=4)
+    s_section = ParagraphStyle('section', fontSize=11, fontName='Helvetica-Bold', spaceAfter=8, textColor=colors.HexColor('#4f46e5'))
+    s_normal = ParagraphStyle('normal', fontSize=9, fontName='Helvetica', spaceAfter=4)
+    s_footer = ParagraphStyle('footer', fontSize=8, fontName='Helvetica', textColor=colors.HexColor('#999999'), alignment=1)
+
+    elemen.append(Paragraph('JURNAL KEUANGAN', s_judul))
+    elemen.append(Paragraph(nama_toko, s_sub))
+    elemen.append(Paragraph(f'Periode: {periode}', s_sub))
+    elemen.append(Paragraph(f'Dicetak: {datetime.now().strftime("%d/%m/%Y %H:%M")}', s_sub))
+    elemen.append(HRFlowable(width='100%', thickness=1.5, color=colors.HexColor('#4f46e5'), spaceAfter=12))
+
+    ringkasan_data = [
+        ['Total Pemasukan', 'Total Pengeluaran', 'Saldo'],
+        [f'Rp {total_debit:,}', f'Rp {total_kredit:,}', f'Rp {saldo:,}'],
+    ]
+    t_ring = Table(ringkasan_data, colWidths=[6*cm, 6*cm, 5*cm])
+    t_ring.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#4f46e5')),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTNAME', (0,1), (-1,1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,-1), 9),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
+        ('BACKGROUND', (0,1), (-1,1), colors.HexColor('#f5f3ff')),
+        ('TOPPADDING', (0,0), (-1,-1), 8),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+    ]))
+    elemen.append(t_ring)
+    elemen.append(Spacer(1, 0.5*cm))
+
+    if jurnal:
+        elemen.append(Paragraph(f'DETAIL JURNAL ({len(jurnal)} Entri)', s_section))
+        data = [['No', 'Tanggal', 'Keterangan', 'Kategori', 'Pemasukan', 'Pengeluaran']]
+        for idx, j in enumerate(jurnal, 1):
+            debit_str = f'Rp {j.debit:,}' if j.debit > 0 else '-'
+            kredit_str = f'Rp {j.kredit:,}' if j.kredit > 0 else '-'
+            data.append([str(idx), j.tanggal.strftime('%d/%m/%Y'), j.keterangan[:40], j.kategori, debit_str, kredit_str])
+        data.append(['', '', '', 'TOTAL', f'Rp {total_debit:,}', f'Rp {total_kredit:,}'])
+        t_jurnal = Table(data, colWidths=[0.8*cm, 2.5*cm, 5.5*cm, 2.5*cm, 3*cm, 3*cm])
+        t_jurnal.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#4f46e5')),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0,0), (-1,-1), 8),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('ALIGN', (2,0), (2,-1), 'LEFT'),
+            ('ALIGN', (3,0), (3,-1), 'LEFT'),
+            ('ALIGN', (4,0), (-1,-1), 'RIGHT'),
+            ('GRID', (0,0), (-1,-1), 0.3, colors.HexColor('#e2e8f0')),
+            ('ROWBACKGROUNDS', (0,1), (-1,-2), [colors.white, colors.HexColor('#f9f8ff')]),
+            ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor('#ede9fe')),
+            ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'),
+            ('TOPPADDING', (0,0), (-1,-1), 5),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+            ('LEFTPADDING', (0,0), (-1,-1), 6),
+            ('RIGHTPADDING', (0,0), (-1,-1), 6),
+        ]))
+        elemen.append(t_jurnal)
+    else:
+        elemen.append(Paragraph('Tidak ada data jurnal untuk periode ini.', s_normal))
+
+    elemen.append(Spacer(1, 0.8*cm))
+    elemen.append(HRFlowable(width='100%', thickness=0.5, color=colors.HexColor('#cccccc'), spaceAfter=8))
+    elemen.append(Paragraph(f'Dicetak: {datetime.now().strftime("%d/%m/%Y %H:%M")}  ·  {nama_toko}' + (f'  ·  {telepon_toko}' if telepon_toko else ''), s_footer))
+
+    doc.build(elemen)
+    buffer.seek(0)
+    return send_file(buffer, mimetype='application/pdf', download_name=f'jurnal-{datetime.now().strftime("%Y%m%d")}.pdf')
 
 @app.route('/api/jurnal', methods=['GET'])
 @login_required

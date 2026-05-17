@@ -709,7 +709,7 @@ function goPage(name, el) {
   if (name === 'dashboard') loadDashboard();
   if (name === 'kasir') loadProdukSelect();
   if (name === 'stok') loadStok();
-  if (name === 'invoice') { loadInvoice(); filterProdukInvoice(); }
+  if (name === 'invoice') { loadInvoice(); if (!produkList.length) { api('/api/produk').then(function(d){ produkList = d; filterProdukInvoice(); }); } else { filterProdukInvoice(); } }
   if (name === 'laba') { loadLabaAnalisis(); hitungLaba(); }
   if (name === 'laporan') loadLaporan();
   if (name === 'neraca') loadNeraca();
@@ -830,7 +830,7 @@ async function prosesTransaksi() {
 }
 
 async function openUrl(url) {
-  var fullUrl = 'https://umkm-app-production.up.railway.app' + url;
+  var fullUrl = window.location.origin + url;
   window.open(fullUrl, '_blank', 'location=yes,hardwareback=yes,toolbarcolor=#1e3a8a');
 }
 
