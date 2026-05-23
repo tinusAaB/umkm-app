@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sudo -u postgres psql -d umkmpro -c \"ALTER TABLE produk ADD COLUMN IF NOT EXISTS satuan VARCHAR\\(50\\) DEFAULT 'pcs';\")",
+      "Bash(psql -d umkmpro -c \"ALTER TABLE produk ADD COLUMN IF NOT EXISTS satuan VARCHAR\\(50\\) DEFAULT 'pcs';\")",
+      "Bash(psql -U postgres -d umkmpro -c \"ALTER TABLE produk ADD COLUMN IF NOT EXISTS satuan VARCHAR\\(50\\) DEFAULT 'pcs';\")"
+    ]
+  }
+}

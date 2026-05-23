@@ -78,6 +78,7 @@ class Produk(db.Model):
     modal = db.Column(db.Integer, default=0)
     stok = db.Column(db.Integer, default=0)
     kategori = db.Column(db.String(100), default='Umum')
+    satuan = db.Column(db.String(50), default='pcs')
     dibuat = db.Column(db.DateTime, default=datetime.now)
 
 class Transaksi(db.Model):
@@ -228,16 +229,16 @@ def update_toko():
 @login_required
 def get_produk():
     produk = Produk.query.all()
-    return jsonify([{'id': p.id, 'nama': p.nama, 'harga': p.harga, 'modal': p.modal, 'stok': p.stok, 'kategori': p.kategori} for p in produk])
+    return jsonify([{'id': p.id, 'nama': p.nama, 'harga': p.harga, 'modal': p.modal, 'stok': p.stok, 'kategori': p.kategori, 'satuan': p.satuan or 'pcs'} for p in produk])
 
 @app.route('/api/produk', methods=['POST'])
 @login_required
 def add_produk():
     b = request.json
-    p = Produk(nama=b['nama'], harga=int(b['harga']), modal=int(b.get('modal', 0)), stok=int(b.get('stok', 99)), kategori=b.get('kategori', 'Umum'))
+    p = Produk(nama=b['nama'], harga=int(b['harga']), modal=int(b.get('modal', 0)), stok=int(b.get('stok', 99)), kategori=b.get('kategori', 'Umum'), satuan=b.get('satuan', 'pcs'))
     db.session.add(p)
     db.session.commit()
-    return jsonify({'id': p.id, 'nama': p.nama, 'harga': p.harga, 'modal': p.modal, 'stok': p.stok})
+    return jsonify({'id': p.id, 'nama': p.nama, 'harga': p.harga, 'modal': p.modal, 'stok': p.stok, 'satuan': p.satuan})
 
 @app.route('/api/produk/<int:pid>/stok', methods=['POST'])
 @login_required
@@ -431,9 +432,11 @@ def cetak_invoice(iid):
     if items_list:
         for idx, item in enumerate(items_list):
             subtotal = item['jumlah'] * item['harga']
-            data.append([str(idx+1), item['nama'], str(item['jumlah']), 'Unit', f"Rp {item['harga']:,}", f"Rp {subtotal:,}"])
+            p_item = Produk.query.get(item.get('id', 0))
+            satuan_item = (p_item.satuan or 'pcs') if p_item else item.get('satuan', 'pcs')
+            data.append([str(idx+1), item['nama'], str(item['jumlah']), satuan_item, f"Rp {item['harga']:,}", f"Rp {subtotal:,}"])
     else:
-        data.append(['1', i.produk, str(i.jumlah), 'Unit', f"Rp {i.harga:,}", f"Rp {i.total:,}"])
+        data.append(['1', i.produk, str(i.jumlah), 'pcs', f"Rp {i.harga:,}", f"Rp {i.total:,}"])
     tabel = Table(data, colWidths=[1*cm, 6*cm, 2*cm, 2*cm, 3.5*cm, 3.5*cm])
     tabel.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#4472C4')),
@@ -563,13 +566,13 @@ def cetak_struk(tid):
     elemen.append(Spacer(1, 0.5*cm))
 
     # Tabel produk
-    data = [['No.', 'Produk', 'Qty', 'Harga Satuan', 'Total']]
+    data = [['No.', 'Produk', 'Qty', 'Satuan', 'Harga Satuan', 'Total']]
     for idx, item in enumerate(items):
         p = Produk.query.get(item['id'])
         if p:
             subtotal = p.harga * item['qty']
-            data.append([str(idx+1), p.nama, str(item['qty']), f"Rp {p.harga:,}", f"Rp {subtotal:,}"])
-    tabel = Table(data, colWidths=[1*cm, 7*cm, 2*cm, 3.5*cm, 3.5*cm])
+            data.append([str(idx+1), p.nama, str(item['qty']), p.satuan or 'pcs', f"Rp {p.harga:,}", f"Rp {subtotal:,}"])
+    tabel = Table(data, colWidths=[1*cm, 5.5*cm, 1.5*cm, 2*cm, 3.5*cm, 3.5*cm])
     tabel.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1e3a8a')),
         ('TEXTCOLOR', (0,0), (-1,0), colors.white),
@@ -577,7 +580,7 @@ def cetak_struk(tid):
         ('FONTSIZE', (0,0), (-1,-1), 10),
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
         ('ALIGN', (1,0), (1,-1), 'LEFT'),
-        ('ALIGN', (3,0), (-1,-1), 'RIGHT'),
+        ('ALIGN', (4,0), (-1,-1), 'RIGHT'),
         ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
         ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor('#f8faff')]),
         ('TOPPADDING', (0,0), (-1,-1), 8),

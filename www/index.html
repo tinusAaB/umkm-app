@@ -430,6 +430,24 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px;
         <div class="field"><label>Modal</label><input id="s-modal" type="number" placeholder="15000" /></div>
       </div>
       <div class="field"><label>Stok Awal</label><input id="s-stok" type="number" value="99" /></div>
+      <div class="field"><label>Satuan</label>
+        <select id="s-satuan" onchange="cekSatuanLain(this)">
+          <option value="pcs">pcs</option>
+          <option value="kg">kg</option>
+          <option value="gram">gram</option>
+          <option value="liter">liter</option>
+          <option value="ml">ml</option>
+          <option value="meter">meter</option>
+          <option value="cm">cm</option>
+          <option value="lusin">lusin</option>
+          <option value="karton">karton</option>
+          <option value="pak">pak</option>
+          <option value="box">box</option>
+          <option value="buah">buah</option>
+          <option value="__custom__">+ Satuan Baru...</option>
+        </select>
+      </div>
+      <div class="field" id="s-satuan-custom-wrap" style="display:none;"><label>Nama Satuan Baru</label><input id="s-satuan-custom" placeholder="Contoh: karung" onkeypress="if(event.key==='Enter')simpanSatuanBaru()" /><button class="btn btn-green" style="margin-top:6px;" onclick="simpanSatuanBaru()">+ Simpan Satuan</button></div>
       <button class="btn btn-orange" onclick="tambahProduk()">Tambah Produk</button>
       <div style="margin-top:8px;">
         <label style="width:100%;">
@@ -797,7 +815,7 @@ function filterProdukKasir() {
   var sel = document.getElementById('k-produk');
   if (!filtered.length) { sel.innerHTML = '<option>Produk tidak ditemukan</option>'; return; }
   sel.innerHTML = filtered.map(function(p){
-    return '<option value="'+p.id+'">'+p.nama+' (Stok: '+p.stok+') — '+fmt(p.harga)+'</option>';
+    return '<option value="'+p.id+'">'+p.nama+' ['+(p.satuan||'pcs')+'] (Stok: '+p.stok+') — '+fmt(p.harga)+'</option>';
   }).join('');
 }
 
@@ -808,7 +826,7 @@ async function tambahKeKeranjang() {
   var p = produkList.find(function(x){ return x.id === pid; });
   if (!p) return;
   var ex = keranjang.find(function(x){ return x.id === pid; });
-  if (ex) { ex.qty += qty; } else { keranjang.push({id: p.id, nama: p.nama, harga: p.harga, qty: qty}); }
+  if (ex) { ex.qty += qty; } else { keranjang.push({id: p.id, nama: p.nama, harga: p.harga, qty: qty, satuan: p.satuan || 'pcs'}); }
   renderKeranjang();
 }
 
@@ -868,7 +886,7 @@ function filterProdukInvoice() {
   var filtered = produkList.filter(function(p){ return kategori === '' || p.kategori === kategori; });
   var sel = document.getElementById('inv-produk-select');
   if (!filtered.length) { sel.innerHTML = '<option>Produk tidak ditemukan</option>'; return; }
-  sel.innerHTML = filtered.map(function(p){ return '<option value="'+p.id+'" data-harga="'+p.harga+'" data-nama="'+p.nama+'">'+p.nama+' — '+fmt(p.harga)+'</option>'; }).join('');
+  sel.innerHTML = filtered.map(function(p){ return '<option value="'+p.id+'" data-harga="'+p.harga+'" data-nama="'+p.nama+'" data-satuan="'+(p.satuan||'pcs')+'">'+p.nama+' ['+(p.satuan||'pcs')+'] — '+fmt(p.harga)+'</option>'; }).join('');
 }
 
 function tambahItemInvoice() {
@@ -878,9 +896,10 @@ function tambahItemInvoice() {
   var pid = parseInt(sel.value);
   var nama = opt.getAttribute('data-nama');
   var harga = parseInt(opt.getAttribute('data-harga'));
+  var satuan = opt.getAttribute('data-satuan') || 'pcs';
   var qty = parseInt(document.getElementById('inv-qty').value) || 1;
   var ex = invoiceItems.find(function(x){ return x.id === pid; });
-  if (ex) { ex.jumlah += qty; } else { invoiceItems.push({id: pid, nama: nama, harga: harga, jumlah: qty}); }
+  if (ex) { ex.jumlah += qty; } else { invoiceItems.push({id: pid, nama: nama, harga: harga, jumlah: qty, satuan: satuan}); }
   renderInvoiceItems();
 }
 
@@ -939,7 +958,7 @@ function filterStok() {
   el.innerHTML = filtered.map(function(p){
     var badge = p.stok < 10 ? 'badge-orange' : 'badge-green';
     var label = p.stok < 10 ? 'Menipis' : 'Aman';
-    return '<div class="list-item"><div class="li-icon" style="background:var(--orange-light)">STK</div><div class="li-body"><div class="li-name">'+p.nama+'</div><div class="li-sub">'+(p.kategori||'Umum')+' · Modal: '+fmt(p.modal)+' · Stok: '+p.stok+'</div></div><div class="li-right"><div class="li-price">'+fmt(p.harga)+'</div><span class="badge '+badge+'">'+label+'</span><br><button class="btn btn-sm btn-blue-soft" style="margin-top:4px;" onclick="editStok('+p.id+',\''+p.nama+'\','+p.stok+')">Edit Stok</button><br><button class="btn btn-sm btn-red-soft" style="margin-top:4px;" onclick="hapusProduk('+p.id+')">Hapus</button></div></div>';
+    return '<div class="list-item"><div class="li-icon" style="background:var(--orange-light)">STK</div><div class="li-body"><div class="li-name">'+p.nama+'</div><div class="li-sub">'+(p.kategori||'Umum')+' · Stok: '+p.stok+' '+(p.satuan||'pcs')+' · Modal: '+fmt(p.modal)+'</div></div><div class="li-right"><div class="li-price">'+fmt(p.harga)+'</div><span class="badge '+badge+'">'+label+'</span><br><button class="btn btn-sm btn-blue-soft" style="margin-top:4px;" onclick="editStok('+p.id+',\''+p.nama+'\','+p.stok+')">Edit Stok</button><br><button class="btn btn-sm btn-red-soft" style="margin-top:4px;" onclick="hapusProduk('+p.id+')">Hapus</button></div></div>';
   }).join('');
 }
 
@@ -978,6 +997,41 @@ function toggleKategoriCustom(sel) {
   }
 }
 
+function cekSatuanLain(sel) {
+  var wrap = document.getElementById('s-satuan-custom-wrap');
+  if (sel.value === '__custom__') {
+    wrap.style.display = '';
+    document.getElementById('s-satuan-custom').focus();
+  } else {
+    wrap.style.display = 'none';
+  }
+}
+
+function simpanSatuanBaru() {
+  var namaSatuan = document.getElementById('s-satuan-custom').value.trim();
+  if (!namaSatuan) { toast('Nama satuan tidak boleh kosong!'); return; }
+  var sel = document.getElementById('s-satuan');
+  var sudahAda = Array.from(sel.options).some(function(o){ return o.value === namaSatuan; });
+  if (!sudahAda) {
+    var opt = document.createElement('option');
+    opt.value = namaSatuan;
+    opt.text = namaSatuan;
+    sel.insertBefore(opt, sel.options[sel.options.length - 1]);
+  }
+  sel.value = namaSatuan;
+  document.getElementById('s-satuan-custom-wrap').style.display = 'none';
+  document.getElementById('s-satuan-custom').value = '';
+  toast('Satuan "' + namaSatuan + '" berhasil ditambahkan! ✓');
+}
+
+function getSatuanTerpilih() {
+  var sel = document.getElementById('s-satuan');
+  if (sel.value === '__custom__') {
+    return document.getElementById('s-satuan-custom').value || 'pcs';
+  }
+  return sel.value;
+}
+
 async function tambahProduk() {
   var nama = document.getElementById('s-nama').value;
   var harga = document.getElementById('s-harga').value;
@@ -989,8 +1043,9 @@ async function tambahProduk() {
     kategori = document.getElementById('s-kategori-custom').value.trim();
     if (!kategori) { toast('Nama kategori tidak boleh kosong!'); return; }
   }
+  var satuan = getSatuanTerpilih();
   if (!nama || !harga) { toast('Nama dan harga wajib diisi!'); return; }
-  await api('/api/produk', 'POST', {nama, harga, modal: modal||0, stok: stok||99, kategori: kategori});
+  await api('/api/produk', 'POST', {nama, harga, modal: modal||0, stok: stok||99, kategori: kategori, satuan: satuan});
   if (sel.value === '__custom__') {
     var customVal = document.getElementById('s-kategori-custom').value.trim();
     var existing = Array.from(sel.options).find(function(o){ return o.value === customVal; });
@@ -1006,6 +1061,9 @@ async function tambahProduk() {
   document.getElementById('s-nama').value = '';
   document.getElementById('s-harga').value = '';
   document.getElementById('s-modal').value = '';
+  document.getElementById('s-satuan').value = 'pcs';
+  document.getElementById('s-satuan-custom-wrap').style.display = 'none';
+  document.getElementById('s-satuan-custom').value = '';
   toast('Produk berhasil ditambahkan ✓');
   loadStok();
 }
