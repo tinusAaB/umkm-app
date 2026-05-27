@@ -3,7 +3,6 @@ from dotenv import load_dotenv
 load_dotenv()
 import midtransclient
 from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for
-from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from flask_bcrypt import Bcrypt
 from datetime import datetime
@@ -13,12 +12,15 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 import json, io, requests as req
+from routes.sync import sync_bp
+from extensions import db
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'postgresql://martin:umkm1234@localhost/umkmpro')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = 'umkmpro-secret-2024'
-db = SQLAlchemy(app)
+db.init_app(app)
+app.register_blueprint(sync_bp)
 bcrypt = Bcrypt(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
