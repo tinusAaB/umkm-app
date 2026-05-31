@@ -44,7 +44,7 @@ async function doLogin() {
   err.style.display = 'none';
   if (!username || !password) { err.textContent = 'Username dan password wajib diisi!'; err.style.display = 'block'; return; }
   var res = await fetch('/login', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({username, password}) });
-  if (res.ok) { window.location.href = '/'; }
+  if (res.ok) { var d = await res.json(); if (d.token) localStorage.setItem('umkm_token', d.token); window.location.href = '/'; }
   else { var d = await res.json(); err.textContent = d.pesan || 'Login gagal'; err.style.display = 'block'; }
 }
 </script>

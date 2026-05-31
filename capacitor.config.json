@@ -6,6 +6,8 @@
     "url": "https://umkm-app-production.up.railway.app",
     "cleartext": false,
     "androidScheme": "https",
+    "iosScheme": "https",
+    "hostname": "umkm-app-production.up.railway.app",
     "allowNavigation": ["umkm-app-production.up.railway.app"]
   },
   "plugins": {

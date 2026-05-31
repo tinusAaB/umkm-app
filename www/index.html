@@ -786,9 +786,20 @@ function goPage(name, el) {
 }
 
 async function api(path, method, body) {
-  var opts = { method: method || 'GET', headers: {'Content-Type':'application/json'} };
+  var opts = {
+    method: method || 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + (localStorage.getItem('umkm_token') || '')
+    }
+  };
   if (body) opts.body = JSON.stringify(body);
   var res = await fetch(path, opts);
+  if (res.status === 401) {
+    localStorage.removeItem('umkm_token');
+    window.location.href = '/login';
+    return;
+  }
   return res.json();
 }
 

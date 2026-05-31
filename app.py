@@ -12,6 +12,8 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 import json, io, requests as req
+import jwt as pyjwt
+from functools import wraps
 from routes.sync import sync_bp
 from extensions import db
 
@@ -27,6 +29,29 @@ login_manager.login_view = 'login'
 
 MIDTRANS_SERVER_KEY = os.environ.get('MIDTRANS_SERVER_KEY', '')
 MIDTRANS_CLIENT_KEY = os.environ.get('MIDTRANS_CLIENT_KEY', '')
+JWT_SECRET = os.environ.get('JWT_SECRET', 'umkmpro-secret-key')
+
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = request.headers.get('Authorization', '').replace('Bearer ', '')
+        if not token:
+            # fallback ke session cookie (untuk web browser biasa)
+            if current_user.is_authenticated:
+                return f(*args, **kwargs)
+            return jsonify({'error': 'Token required'}), 401
+        try:
+            data = pyjwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+            user = User.query.get(data['user_id'])
+            if not user:
+                return jsonify({'error': 'User not found'}), 401
+        except pyjwt.ExpiredSignatureError:
+            return jsonify({'error': 'Token expired'}), 401
+        except Exception:
+            return jsonify({'error': 'Token invalid'}), 401
+        return f(*args, **kwargs)
+    return decorated
+
 print(f"Server Key loaded: {MIDTRANS_SERVER_KEY[:10]}...")
 
 snap = midtransclient.Snap(
@@ -183,7 +208,12 @@ def login():
         user = User.query.filter_by(username=data['username']).first()
         if user and bcrypt.check_password_hash(user.password, data['password']):
             login_user(user)
-            return jsonify({'ok': True, 'role': user.role, 'nama': user.nama})
+            import datetime as dt
+            token = pyjwt.encode({
+                'user_id': user.id,
+                'exp': dt.datetime.utcnow() + dt.timedelta(days=30)
+            }, JWT_SECRET, algorithm='HS256')
+            return jsonify({'ok': True, 'role': user.role, 'nama': user.nama, 'token': token})
         return jsonify({'ok': False, 'pesan': 'Username atau password salah'}), 401
     return render_template('login.html')
 
@@ -234,13 +264,13 @@ def update_toko():
     return jsonify({'ok': True})
 
 @app.route('/api/produk', methods=['GET'])
-@login_required
+@token_required
 def get_produk():
     produk = Produk.query.all()
     return jsonify([{'id': p.id, 'nama': p.nama, 'harga': p.harga, 'modal': p.modal, 'stok': p.stok, 'kategori': p.kategori, 'satuan': p.satuan or 'pcs'} for p in produk])
 
 @app.route('/api/produk', methods=['POST'])
-@login_required
+@token_required
 def add_produk():
     b = request.json
     p = Produk(nama=b['nama'], harga=int(b['harga']), modal=int(b.get('modal', 0)), stok=int(b.get('stok', 99)), kategori=b.get('kategori', 'Umum'), satuan=b.get('satuan', 'pcs'))
@@ -249,7 +279,7 @@ def add_produk():
     return jsonify({'id': p.id, 'nama': p.nama, 'harga': p.harga, 'modal': p.modal, 'stok': p.stok, 'satuan': p.satuan})
 
 @app.route('/api/produk/<int:pid>/stok', methods=['POST'])
-@login_required
+@token_required
 def update_stok(pid):
     p = Produk.query.get_or_404(pid)
     b = request.json
@@ -258,7 +288,7 @@ def update_stok(pid):
     return jsonify({'ok': True, 'stok': p.stok})
     
 @app.route('/api/produk/<int:pid>', methods=['DELETE'])
-@login_required
+@token_required
 def del_produk(pid):
     p = Produk.query.get_or_404(pid)
     db.session.delete(p)
@@ -266,7 +296,7 @@ def del_produk(pid):
     return jsonify({'ok': True})
 
 @app.route('/api/transaksi', methods=['GET'])
-@login_required
+@token_required
 def get_transaksi():
     transaksi = Transaksi.query.order_by(Transaksi.tanggal.desc()).all()
     total_subtotal = sum(t.subtotal if t.subtotal is not None else t.total for t in transaksi)
@@ -280,7 +310,7 @@ def get_transaksi():
     })
 
 @app.route('/api/transaksi', methods=['POST'])
-@login_required
+@token_required
 def add_transaksi():
     b = request.json
     items = b['items']
@@ -342,13 +372,13 @@ def add_transaksi():
     return jsonify({'id': t.id, 'total': total})
 
 @app.route('/api/invoice', methods=['GET'])
-@login_required
+@token_required
 def get_invoice():
     invoices = Invoice.query.order_by(Invoice.tanggal.desc()).all()
     return jsonify([{'id': i.id, 'nomor': i.nomor, 'pelanggan': i.pelanggan, 'produk': i.produk, 'jumlah': i.jumlah, 'harga': i.harga, 'total': i.total, 'jatuh_tempo': i.jatuh_tempo, 'status': i.status, 'tanggal': i.tanggal.strftime('%d/%m/%Y'), 'items': json.loads(i.items or '[]')} for i in invoices])
 
 @app.route('/api/invoice', methods=['POST'])
-@login_required
+@token_required
 def add_invoice():
     b = request.json
     nomor = f"INV-{datetime.now().strftime('%Y%m%d')}-{Invoice.query.count()+1:03d}"
@@ -371,7 +401,7 @@ def add_invoice():
     return jsonify({'id': i.id, 'nomor': i.nomor})
 
 @app.route('/api/invoice/<int:iid>/lunas', methods=['POST'])
-@login_required
+@token_required
 def lunas_invoice(iid):
     i = Invoice.query.get_or_404(iid)
     i.status = 'Lunas'
@@ -379,7 +409,7 @@ def lunas_invoice(iid):
     return jsonify({'ok': True})
 
 @app.route('/api/invoice/<int:iid>/pdf')
-@login_required
+@token_required
 def cetak_invoice(iid):
     i = Invoice.query.get_or_404(iid)
     toko = Toko.query.first()
@@ -801,7 +831,7 @@ def stok_alert():
     return jsonify({'jumlah': len(menipis), 'produk': [{'id': p.id, 'nama': p.nama, 'stok': p.stok, 'harga': p.harga} for p in menipis]})
 
 @app.route('/api/laporan')
-@login_required
+@token_required
 def laporan():
     from collections import defaultdict
     transaksi = Transaksi.query.order_by(Transaksi.tanggal.asc()).all()

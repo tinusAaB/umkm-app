@@ -10,3 +10,4 @@ SQLAlchemy==2.0.49
 python-dotenv
 midtransclient
 openpyxl
+PyJWT
