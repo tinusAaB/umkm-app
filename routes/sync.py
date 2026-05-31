@@ -35,26 +35,17 @@ sync_bp = Blueprint('sync_bp', __name__, url_prefix='/sync')
 # Constants
 # ---------------------------------------------------------------------------
 
-ALLOWED_TABLES = frozenset({'transaksi', 'produk', 'pelanggan'})
+ALLOWED_TABLES = frozenset({'transaksi', 'produk'})
 
 PULL_LIMIT = 1000
 
 # Per-table column whitelists used by _safe_upsert to prevent SQL injection
 # when building dynamic INSERT statements from client payloads.
-ALLOWED_COLUMNS: dict[str, frozenset] = {
-    'produk': frozenset({
-        'id', 'nama', 'harga', 'modal', 'stok', 'kategori', 'satuan',
-        'updated_at', 'deleted_at', 'device_id',
-    }),
-    'pelanggan': frozenset({
-        'id', 'nama', 'telepon', 'alamat',
-        'updated_at', 'deleted_at', 'device_id',
-    }),
-    'transaksi': frozenset({
-        'id', 'pelanggan_id', 'total', 'status', 'catatan',
-        'pelanggan', 'kasir', 'subtotal', 'ppn', 'items', 'tanggal',
-        'updated_at', 'deleted_at', 'device_id',
-    }),
+ALLOWED_COLUMNS = {
+    'produk': ['id', 'nama', 'harga', 'modal', 'stok', 'katagori',
+               'dibuat', 'satuan', 'updated_at', 'deleted_at', 'device_id'],
+    'transaksi': ['id', 'pelanggan', 'kasir', 'sub_total', 'ppn', 'total',
+                  'item', 'tanggal', 'update_at', 'delete_at', 'device_id'],
 }
 
 # ---------------------------------------------------------------------------
@@ -114,10 +105,12 @@ def _safe_upsert(table_name: str, payload: dict, device_id: str) -> str:
         if c != 'id'
     )
 
-    # Guard: if updated_at is missing from payload, skip the WHERE guard so
-    # the upsert always proceeds (better than silently losing the record).
-    if 'updated_at' in cols:
-        where_clause = f'WHERE EXCLUDED.updated_at > {table_name}.updated_at'
+    # Guard: if updated_at / update_at is missing from payload, skip the WHERE
+    # guard so the upsert always proceeds (better than silently losing the record).
+    # transaksi uses 'update_at'; all other tables use 'updated_at'.
+    ts_col = 'update_at' if table_name == 'transaksi' else 'updated_at'
+    if ts_col in cols:
+        where_clause = f'WHERE EXCLUDED.{ts_col} > {table_name}.{ts_col}'
     else:
         where_clause = ''
 
@@ -141,11 +134,13 @@ def _safe_delete(table_name: str, record_id: str) -> str:
     if table_name not in ALLOWED_TABLES:
         raise ValueError(f"Table '{table_name}' is not allowed.")
 
+    # transaksi uses 'delete_at'; all other tables use 'deleted_at'.
+    del_col = 'delete_at' if table_name == 'transaksi' else 'deleted_at'
     sql = text(f"""
         UPDATE {table_name}
-        SET deleted_at = NOW()
+        SET {del_col} = NOW()
         WHERE id = :record_id
-          AND deleted_at IS NULL
+          AND {del_col} IS NULL
     """)
     db.session.execute(sql, {'record_id': record_id})
     return 'ok'
@@ -196,7 +191,7 @@ def push():
             "items": [
                 {
                     "id":         <int>  — sync_queue.id on the device,
-                    "table_name": "produk" | "pelanggan" | "transaksi",
+                    "table_name": "produk" | "transaksi",
                     "record_id":  "<uuid>",
                     "operation":  "INSERT" | "UPDATE" | "DELETE",
                     "payload":    { ...row fields... },
@@ -303,7 +298,6 @@ def pull():
         200 {
               "records": {
                   "produk":    [...],
-                  "pelanggan": [...],
                   "transaksi": [...]
               },
               "server_time": "<ISO 8601 UTC now>"
@@ -323,14 +317,17 @@ def pull():
 
         records: dict[str, list] = {}
 
-        for table in ('produk', 'pelanggan', 'transaksi'):
+        for table in ('produk', 'transaksi'):
             try:
+                # transaksi uses 'update_at' / 'delete_at'; others use 'updated_at' / 'deleted_at'.
+                upd_col = 'update_at' if table == 'transaksi' else 'updated_at'
+                del_col = 'delete_at' if table == 'transaksi' else 'deleted_at'
                 if since:
                     sql = text(f"""
                         SELECT * FROM {table}
                         WHERE (
-                            updated_at > :since
-                            OR (deleted_at IS NOT NULL AND deleted_at > :since)
+                            {upd_col} > :since
+                            OR ({del_col} IS NOT NULL AND {del_col} > :since)
                         )
                         AND (device_id IS NULL OR device_id != :device_id)
                         LIMIT :lim
