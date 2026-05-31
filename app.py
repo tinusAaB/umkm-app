@@ -74,7 +74,7 @@ def load_user(user_id):
 
 class Produk(db.Model):
     __tablename__ = 'produk'
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.String, primary_key=True)
     nama = db.Column(db.String(200), nullable=False)
     harga = db.Column(db.Integer, nullable=False)
     modal = db.Column(db.Integer, default=0)
@@ -82,10 +82,13 @@ class Produk(db.Model):
     kategori = db.Column(db.String(100), default='Umum')
     satuan = db.Column(db.String(50), default='pcs')
     dibuat = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now)
+    deleted_at = db.Column(db.DateTime, nullable=True)
+    device_id  = db.Column(db.String, nullable=True)
 
 class Transaksi(db.Model):
     __tablename__ = 'transaksi'
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.String, primary_key=True)
     pelanggan = db.Column(db.String(200), default='Umum')
     kasir = db.Column(db.String(100), default='Kasir')
     subtotal = db.Column(db.Integer, default=0)
@@ -93,6 +96,9 @@ class Transaksi(db.Model):
     total = db.Column(db.Integer, nullable=False)
     items = db.Column(db.Text)
     tanggal = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now)
+    deleted_at = db.Column(db.DateTime, nullable=True)
+    device_id  = db.Column(db.String, nullable=True)
 
 class Jurnal(db.Model):
     __tablename__ = "jurnal"
