@@ -279,6 +279,36 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px;
 .nav-btn:has(+ .nav-btn:hover) {
   transform: scale(1.12) translateY(2px);
 }
+
+/* ── Sync widget ─────────────────────────────────────────────────────────── */
+#sync-widget {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; user-select: none;
+}
+#sync-status-dot {
+  display: inline-block; width: 8px; height: 8px;
+  border-radius: 50%; flex-shrink: 0;
+  transition: background-color 0.3s ease;
+  background-color: #888780;
+}
+#sync-status-dot.online  { background-color: #1D9E75; }
+#sync-status-dot.offline { background-color: #888780; }
+#sync-status-dot.syncing { background-color: #EF9F27; animation: sync-pulse 1s ease-in-out infinite; }
+@keyframes sync-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+#sync-status-text { color: inherit; white-space: nowrap; }
+#sync-pending-count {
+  display: none; background: #EF9F27; color: #412402;
+  border-radius: 10px; padding: 1px 6px;
+  font-size: 11px; font-weight: 600; line-height: 1.5; white-space: nowrap;
+}
+#btn-sync-manual {
+  display: inline-flex; align-items: center; gap: 5px;
+  border: 0.5px solid currentColor; border-radius: 6px;
+  padding: 4px 10px; background: transparent; color: inherit;
+  font-size: 13px; cursor: pointer; transition: opacity 0.2s ease; white-space: nowrap;
+}
+#btn-sync-manual:hover:not(:disabled) { opacity: 0.75; }
+#btn-sync-manual:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>
 </head>
 <body>
@@ -289,6 +319,22 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px;
     </div>
     <div class="header-right">
       <div class="header-date" id="hdr-date"></div>
+      <div id="sync-widget">
+        <span id="sync-status-dot" class="offline" title="Status koneksi"></span>
+        <span id="sync-status-text">Offline</span>
+        <span id="sync-pending-count" style="display:none;">0</span>
+        <button id="btn-sync-manual" type="button" title="Sinkronisasi manual">
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13"
+               viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"
+               aria-hidden="true" style="vertical-align:-1px;">
+            <polyline points="23 4 23 10 17 10"/>
+            <polyline points="1 20 1 14 7 14"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10 M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+          </svg>
+          Sync
+        </button>
+      </div>
       <button class="logout-btn" onclick="window.location.href='/logout'">Keluar</button>
     </div>
   </div>
@@ -851,7 +897,8 @@ async function prosesTransaksi() {
 }
 
 async function openUrl(url) {
-  var fullUrl = window.location.origin + url;
+  var serverUrl = 'https://umkm-app-production.up.railway.app';
+  var fullUrl = serverUrl + url;
   window.open(fullUrl, '_blank', 'location=yes,hardwareback=yes,toolbarcolor=#1e3a8a');
 }
 
@@ -1430,5 +1477,6 @@ cekStokAlert();
 })();
 
 </script>
+<script type="module" src="./js/app.js"></script>
 </body>
 </html>

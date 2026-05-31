@@ -4,6 +4,16 @@
   "webDir": "www",
   "server": {
     "url": "https://umkm-app-production.up.railway.app",
-    "cleartext": false
+    "cleartext": false,
+    "androidScheme": "https",
+    "allowNavigation": ["umkm-app-production.up.railway.app"]
+  },
+  "plugins": {
+    "CapacitorCookies": {
+      "enabled": true
+    },
+    "CapacitorHttp": {
+      "enabled": true
+    }
   }
 }
