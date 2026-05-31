@@ -44,8 +44,8 @@ PULL_LIMIT = 1000
 ALLOWED_COLUMNS = {
     'produk': ['id', 'nama', 'harga', 'modal', 'stok', 'katagori',
                'dibuat', 'satuan', 'updated_at', 'deleted_at', 'device_id'],
-    'transaksi': ['id', 'pelanggan', 'kasir', 'sub_total', 'ppn', 'total',
-                  'item', 'tanggal', 'update_at', 'delete_at', 'device_id'],
+    'transaksi': ['id', 'pelanggan', 'kasir', 'subtotal', 'ppn', 'total',
+                  'items', 'tanggal', 'updated_at', 'deleted_at', 'device_id'],
 }
 
 # ---------------------------------------------------------------------------
