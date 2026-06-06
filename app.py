@@ -830,9 +830,9 @@ def neraca():
     for t in transaksi:
         items = json.loads(t.items or '[]')
         for item in items:
-            p = Produk.query.get(item['id'])
+            p = Produk.query.get(int(item['id']))
             if p:
-                total_hpp += p.modal * item['qty']
+                total_hpp += p.modal * int(item.get('qty', 1))
     laba_kotor = total_pendapatan - total_hpp
     nilai_stok = db.session.query(db.func.sum(Produk.modal * Produk.stok)).scalar() or 0
     piutang = db.session.query(db.func.sum(Invoice.total)).filter_by(status='Belum Bayar').scalar() or 0
@@ -1114,9 +1114,9 @@ def neraca_pdf():
     for t in transaksi_all:
         items = json.loads(t.items or '[]')
         for item in items:
-            p = Produk.query.get(item['id'])
+            p = Produk.query.get(int(item['id']))
             if p:
-                total_hpp += p.modal * item['qty']
+                total_hpp += p.modal * int(item.get('qty', 1))
     laba_kotor = total_pendapatan - total_hpp
     margin = round(laba_kotor / total_pendapatan * 100, 1) if total_pendapatan > 0 else 0
     nilai_stok = db.session.query(db.func.sum(Produk.modal * Produk.stok)).scalar() or 0
