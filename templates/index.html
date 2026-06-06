@@ -852,7 +852,13 @@ async function prosesTransaksi() {
 
 async function openUrl(url) {
   var fullUrl = window.location.origin + url;
-  window.open(fullUrl, '_blank', 'location=yes,hardwareback=yes,toolbarcolor=#1e3a8a');
+  var a = document.createElement('a');
+  a.href = fullUrl;
+  a.target = '_blank';
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 async function bayarOnline() {
