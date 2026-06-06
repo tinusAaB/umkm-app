@@ -86,7 +86,8 @@ body { font-family: 'Nunito', sans-serif; background: linear-gradient(160deg, #1
 .logo-pro { font-size: 11px; font-weight: 700; background: linear-gradient(135deg, var(--purple), var(--blue)); color: white; padding: 2px 8px; border-radius: 100px; margin-left: 4px; vertical-align: middle; }
 .header-right { display: flex; align-items: center; gap: 8px; }
 .header-date { font-size: 11px; color: rgba(255,255,255,0.7); font-family: 'DM Mono', monospace; }
-.logout-btn { font-size: 12px; font-weight: 700; color: #fff; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); border-radius: var(--radius-xs); padding: 6px 12px; cursor: pointer; font-family: 'Nunito', sans-serif; backdrop-filter: blur(10px); }
+.logout-btn { font-size: 12px; font-weight: 700; color: #fff; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); border-radius: var(--radius-xs); padding: 6px 12px; cursor: pointer; font-family: 'Nunito', sans-serif; backdrop-filter: blur(10px); transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.logout-btn:hover { transform: scale(1.15) translateY(2px); background: rgba(220,38,38,0.7); border-color: rgba(220,38,38,0.5); box-shadow: 0 4px 12px rgba(220,38,38,0.3); }
 
 /* Nav */
 .nav-wrap { padding: 0 16px 8px; flex-shrink: 0; overflow-x: auto; scrollbar-width: none; background: transparent; }
